@@ -1,0 +1,3 @@
+[submodule "tf_verify/ml_bound_solver"]
+	path = tf_verify/ml_bound_solver
+	url = https://github.com/EvitanRelta/ml-bound-solver.git
