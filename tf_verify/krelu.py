@@ -135,7 +135,7 @@ def sparse_heuristic_with_cutoff(length, lb, ub, K=3, s=-2):
           "split_zero", len(all_vars),
           "after cutoff", n_vars_above_cutoff,
           "number of args", len(kact_args))
-
+    # print(kact_args)
     return kact_args
 
 
