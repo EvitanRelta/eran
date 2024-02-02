@@ -1,23 +1,6 @@
-"""
-  Copyright 2020 ETH Zurich, Secure, Reliable, and Intelligent Systems Lab
-
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-      http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-"""
-
+from functools import reduce
 
 import tensorflow as tf
-import numpy as np
-from functools import reduce
 
 
 def tensorshape_to_intlist(tensorshape):
@@ -34,7 +17,6 @@ def tensorshape_to_intlist(tensorshape):
         list of ints corresponding to tensorshape
     """
     return list(map(lambda j: 1 if j.value is None else int(j), tensorshape))
-
 
 
 def eran_affine(inputs, units, name=None):
@@ -55,11 +37,11 @@ def eran_affine(inputs, units, name=None):
     output : tf.Tensor
         tensor associated with the bias add operation
     """
-    n      = reduce(lambda x,y: x*y, tensorshape_to_intlist(inputs.shape), 1)
+    n = reduce(lambda x, y: x * y, tensorshape_to_intlist(inputs.shape), 1)
     inputs = tf.reshape(inputs, (-1, n))
     matrix = tf.Variable(tf.glorot_uniform_initializer(dtype=tf.float64)((n, units)))
-    bias   = tf.Variable(tf.zeros_initializer(dtype=tf.float64)((units,)))
-    
+    bias = tf.Variable(tf.zeros_initializer(dtype=tf.float64)((units,)))
+
     model = tf.matmul(inputs, matrix)
     return tf.nn.bias_add(model, bias, name=name)
 
@@ -89,11 +71,12 @@ def eran_conv2d_without_activation(inputs, kernel_size, number_of_filters, strid
         tensor associated with the bias add operation
     """
     assert padding in ['SAME', 'VALID'], "padding must be either 'VALID' or 'SAME'"
-    
+
     in_channels = int(inputs.shape[-1])
-    filters     = tf.Variable(tf.glorot_uniform_initializer(dtype=tf.float64)((kernel_size[0], kernel_size[1], in_channels, number_of_filters)))
-    bias        = tf.Variable(tf.zeros_initializer(dtype=tf.float64)((number_of_filters,)))
-    
+    filters = tf.Variable(tf.glorot_uniform_initializer(dtype=tf.float64)(
+        (kernel_size[0], kernel_size[1], in_channels, number_of_filters)))
+    bias = tf.Variable(tf.zeros_initializer(dtype=tf.float64)((number_of_filters,)))
+
     model = tf.nn.conv2d(inputs, filters, [1, strides[0], strides[1], 1], padding)
     return tf.nn.bias_add(model, bias, name=name)
 
@@ -146,7 +129,7 @@ def eran_input(shape, name=None):
     batch_shape = [None]
     for s in shape:
         batch_shape.append(s)
-    
+
     return tf.placeholder(tf.float64, batch_shape, name=name)
 
 
@@ -173,7 +156,7 @@ def eran_reshape(inputs, new_shape, name=None):
     batch_shape = [-1]
     for s in new_shape:
         batch_shape.append(s)
-    return tf.reshape(inputs, batch_shape, name=name)    
+    return tf.reshape(inputs, batch_shape, name=name)
 
 
 def eran_dense(inputs, units, activation='relu', name=None):
@@ -196,7 +179,7 @@ def eran_dense(inputs, units, activation='relu', name=None):
     output : tf.Tensor
         tensor associated with the non-linearity operation
     """
-    tmp  = eran_affine(inputs, units)
+    tmp = eran_affine(inputs, units)
     return eran_activation(tmp, activation, name=name)
 
 
@@ -226,7 +209,7 @@ def eran_conv2d(inputs, kernel_size, number_of_filters, strides, padding, activa
     output : tf.Tensor
         tensor associated with the non-linearity operation
     """
-    tmp  = eran_conv2d_without_activation(inputs, kernel_size, number_of_filters, strides, padding)
+    tmp = eran_conv2d_without_activation(inputs, kernel_size, number_of_filters, strides, padding)
     return eran_activation(tmp, activation, name=name)
 
 
@@ -256,8 +239,9 @@ def eran_maxpool(inputs, pool_size, strides, padding, name=None):
     """
     assert padding in ['SAME', 'VALID'], "padding must be either 'VALID' or 'SAME'"
     assert len(inputs.shape) == 4, "inputed tensor isn't an image (4D tensor)"
-    
-    return tf.nn.max_pool(inputs, [1, pool_size[0], pool_size[1], 1], [1, strides[0], strides[1], 1], padding, name=name)
+
+    return tf.nn.max_pool(inputs, [1, pool_size[0], pool_size[1], 1], [1, strides[0], strides[1], 1], padding,
+                          name=name)
 
 
 def eran_resnet_conv2d(inputs, kernel_size, number_of_layers, activation='relu', name=None):
@@ -287,9 +271,9 @@ def eran_resnet_conv2d(inputs, kernel_size, number_of_layers, activation='relu',
     assert number_of_layers > 0, "number_of_layers must be greater than zero"
     number_of_filters = int(inputs.shape[-1])
     tmp = inputs
-    for i in range(number_of_layers-1):
-        tmp = eran_conv2d(tmp, kernel_size, number_of_filters, [1,1], 'SAME', activation)
-    tmp = eran_conv2d_without_activation(tmp, kernel_size, number_of_filters, [1,1], 'SAME')
+    for i in range(number_of_layers - 1):
+        tmp = eran_conv2d(tmp, kernel_size, number_of_filters, [1, 1], 'SAME', activation)
+    tmp = eran_conv2d_without_activation(tmp, kernel_size, number_of_filters, [1, 1], 'SAME')
     tmp = tf.add(tmp, inputs)
     return eran_activation(tmp, activation, name=name)
 
@@ -317,12 +301,11 @@ def eran_resnet_dense(inputs, number_of_layers, activation='relu', name=None):
         tensor associated with the last non-linearity operation
     """
     assert number_of_layers > 0, "number_of_layers must be greater than zero"
-    units  = reduce(lambda x,y: x*y, tensorshape_to_intlist(inputs.shape), 1)
+    units = reduce(lambda x, y: x * y, tensorshape_to_intlist(inputs.shape), 1)
     inputs = eran_reshape(inputs, [units])
-    tmp    = inputs
-    for i in range(number_of_layers-1):
+    tmp = inputs
+    for i in range(number_of_layers - 1):
         tmp = eran_dense(tmp, units, activation)
     tmp = eran_affine(tmp, units)
     tmp = tf.add(tmp, inputs)
     return eran_activation(tmp, activation, name=name)
-

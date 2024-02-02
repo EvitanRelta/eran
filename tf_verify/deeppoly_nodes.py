@@ -1,22 +1,6 @@
-"""
-  Copyright 2020 ETH Zurich, Secure, Reliable, and Intelligent Systems Lab
+from functools import reduce
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-      http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-"""
-
-
-import numpy as np
-from config import config, Device
+from tf_verify.config import config, Device
 
 if config.device == Device.CPU:
     from fppoly import *
@@ -26,113 +10,53 @@ else:
 from elina_interval import *
 from elina_abstract0 import *
 from elina_manager import *
-from ai_milp import *
-from functools import reduce
 from refine_activation import *
 
+from ctypes import *
 
-def calc_bounds(man, element, nn, nlb, nub, relu_groups, is_refine_layer = False, destroy=True, use_krelu = False):
+
+def calc_bounds(man, element, nn, nlb, nub, relu_groups, is_refine_layer=False, destroy=True, use_krelu=False):
     layerno = nn.calc_layerno()
     bounds = box_for_layer(man, element, layerno)
     num_neurons = get_num_neurons_in_layer(man, element, layerno)
+
     itv = [bounds[i] for i in range(num_neurons)]
     lbi = [x.contents.inf.contents.val.dbl for x in itv]
     ubi = [x.contents.sup.contents.val.dbl for x in itv]
+    # print(f'{layerno}'.center(100, '-'))
+    # print(f'num_neurons: {num_neurons}')
+    # print(lbi[:5], lbi[-5:])
+    # print(ubi[:5], ubi[-5:])
     if is_refine_layer:
         nlb.append(lbi)
         nub.append(ubi)
     if destroy:
-        elina_interval_array_free(bounds,num_neurons)
+        elina_interval_array_free(bounds, num_neurons)
         return lbi, ubi
+
     return layerno, bounds, num_neurons, lbi, ubi
 
 
 def add_input_output_information_deeppoly(self, input_names, output_name, output_shape):
-    """
-    sets for an object the three fields:
-        - self.output_length
-        - self.input_names
-        - self.output_name
-    which will mainly be used by the Optimizer, but can also be used by the Nodes itself
-    
-    Arguments
-    ---------
-    self : Object
-        will be a DeepzonoNode, but could be any object
-    input_names : iterable
-        iterable of strings, each one being the name of another Deepzono-Node
-    output_name : str
-        name of self
-    output_shape : iterable
-        iterable of ints with the shape of the output of this node
-        
-    Return
-    ------
-    None 
-    """
-    if len(output_shape)==4:
-        self.output_length = reduce((lambda x, y: x*y), output_shape[1:len(output_shape)])
-    else:
-        self.output_length = reduce((lambda x, y: x*y), output_shape[0:len(output_shape)])
-    self.input_names   = input_names
-    self.output_name   = output_name
+    self.output_length = reduce(lambda x, y: x * y, output_shape[1:]) \
+        if len(output_shape) == 4 else reduce(lambda x, y: x * y, output_shape[:])
+    self.input_names, self.output_name = input_names, output_name
 
 
 class DeeppolyInput:
-    def __init__(self, specLB, specUB, input_names, output_name, output_shape,
-                 lexpr_weights=None, lexpr_cst=None, lexpr_dim=None,
-                 uexpr_weights=None, uexpr_cst=None, uexpr_dim=None,
-                 expr_size=0, spatial_constraints=None):
-        """
-        Arguments
-        ---------
-        specLB : numpy.ndarray
-            1D array with the lower bound of the input spec
-        specUB : numpy.ndarray
-            1D array with the upper bound of the input spec
-        lexpr_weights: numpy.ndarray
-            ndarray of doubles with coefficients of lower polyhedral expressions
-        lexpr_cst: numpy.ndarray
-            ndarray of doubles with the constants of lower polyhedral expressions
-        lexpr_dim: numpy.ndarray
-            ndarray of unsigned int with the indexes of pixels from the original image for the lower polyhedral expressions
-        uexpr_weights: numpy.ndarray
-            ndarray of doubles with coefficients of upper polyhedral expressions
-        uexpr_cst: numpy.ndarray
-            ndarray of doubles with the constants of upper polyhedral expressions
-        uexpr_dim: numpy.ndarray
-            ndarray of unsigned int with the indexes of pixels from the original image for the upper polyhedral expressions
-        expr_size: numpy.ndarray
-            unsigned int with the sizes of polyhedral expressions
-        """
+    def __init__(self, specLB: np.ndarray, specUB: np.ndarray, input_names, output_name, output_shape,
+                 lexpr_weights: np.ndarray = None, lexpr_cst: np.ndarray = None, lexpr_dim: np.ndarray = None,
+                 uexpr_weights: np.ndarray = None, uexpr_cst: np.ndarray = None, uexpr_dim: np.ndarray = None,
+                 expr_size: int = 0, spatial_constraints=None):
         self.specLB = np.ascontiguousarray(specLB, dtype=np.double)
         self.specUB = np.ascontiguousarray(specUB, dtype=np.double)
 
-        if lexpr_weights is not None:
-            self.lexpr_weights = np.ascontiguousarray(lexpr_weights, dtype=np.double)
-        else:
-            self.lexpr_weights = None
-        if lexpr_cst is not None:
-            self.lexpr_cst = np.ascontiguousarray(lexpr_cst, dtype=np.double)
-        else:
-            self.lexpr_cst = None
-        if lexpr_dim is not None:
-            self.lexpr_dim = np.ascontiguousarray(lexpr_dim, dtype=np.uintp)
-        else:
-            self.lexpr_dim = None
-
-        if uexpr_weights is not None:
-            self.uexpr_weights = np.ascontiguousarray(uexpr_weights, dtype=np.double)
-        else:
-            self.uexpr_weights = None
-        if uexpr_cst is not None:
-            self.uexpr_cst = np.ascontiguousarray(uexpr_cst, dtype=np.double)
-        else:
-            self.uexpr_cst = None
-        if uexpr_dim is not None:
-            self.uexpr_dim = np.ascontiguousarray(lexpr_dim, dtype=np.uintp)
-        else:
-            self.uexpr_dim = None
+        self.lexpr_weights = np.ascontiguousarray(lexpr_weights, dtype=np.double) if lexpr_weights is not None else None
+        self.lexpr_cst = np.ascontiguousarray(lexpr_cst, dtype=np.double) if lexpr_cst is not None else None
+        self.lexpr_dim = np.ascontiguousarray(lexpr_dim, dtype=np.uintp) if lexpr_dim is not None else None
+        self.uexpr_weights = np.ascontiguousarray(uexpr_weights, dtype=np.double) if uexpr_weights is not None else None
+        self.uexpr_cst = np.ascontiguousarray(uexpr_cst, dtype=np.double) if uexpr_cst is not None else None
+        self.uexpr_dim = np.ascontiguousarray(lexpr_dim, dtype=np.uintp) if uexpr_dim is not None else None
 
         self.expr_size = expr_size
 
@@ -142,15 +66,10 @@ class DeeppolyInput:
 
         if spatial_constraints is not None:
             self.spatial_gamma = spatial_constraints['gamma']
-            self.spatial_indices = np.ascontiguousarray(
-                spatial_constraints['indices'], np.uint64
-            )
-            self.spatial_neighbors = np.ascontiguousarray(
-                spatial_constraints['neighbors'], np.uint64
-            )
+            self.spatial_indices = np.ascontiguousarray(spatial_constraints['indices'], np.uint64)
+            self.spatial_neighbors = np.ascontiguousarray(spatial_constraints['neighbors'], np.uint64)
 
         add_input_output_information_deeppoly(self, input_names, output_name, output_shape)
-
 
     def transformer(self, man):
         """
@@ -182,6 +101,7 @@ class DeeppolyNode:
     """
     Parent class for all the classes that implement fully connected layers
     """
+
     def __init__(self, weights, bias, input_names, output_name, output_shape):
         """
         Arguments
@@ -192,7 +112,7 @@ class DeeppolyNode:
             bias of the fully connected layer
         """
         self.weights = np.ascontiguousarray(weights, dtype=np.double)
-        self.bias    = np.ascontiguousarray(bias,    dtype=np.double)
+        self.bias = np.ascontiguousarray(bias, dtype=np.double)
         add_input_output_information_deeppoly(self, input_names, output_name, output_shape)
 
     def get_arguments(self):
@@ -205,8 +125,8 @@ class DeeppolyNode:
             the four entries are pointers to the rows of the matrix, the bias, the length of the output, and the length of the input
         """
         xpp = self.get_xpp()
-        return xpp, self.bias, self.weights.shape[0], self.weights.shape[1], self.predecessors, len(self.predecessors)
 
+        return xpp, self.bias, self.weights.shape[0], self.weights.shape[1], self.predecessors, len(self.predecessors)
 
     def get_xpp(self):
         """
@@ -217,13 +137,14 @@ class DeeppolyNode:
         output : numpy.ndarray
             pointers to the rows of the matrix
         """
-        return (self.weights.__array_interface__['data'][0]+ np.arange(self.weights.shape[0])*self.weights.strides[0]).astype(np.uintp)
 
-
+        return (self.weights.__array_interface__['data'][0] + np.arange(self.weights.shape[0]) * self.weights.strides[
+            0]).astype(np.uintp)
 
 
 class DeeppolyFCNode(DeeppolyNode):
-    def transformer(self, nn, man, element, nlb, nub, relu_groups, refine, timeout_lp, timeout_milp, use_default_heuristic, testing):
+    def transformer(self, nn, man, element, nlb, nub, relu_groups, refine, timeout_lp, timeout_milp,
+                    use_default_heuristic, testing):
         """
         transformer for the first layer of a neural network, if that first layer is fully connected with relu
         
@@ -241,7 +162,7 @@ class DeeppolyFCNode(DeeppolyNode):
         """
         handle_fully_connected_layer(man, element, *self.get_arguments())
         calc_bounds(man, element, nn, nlb, nub, relu_groups, is_refine_layer=True, use_krelu=refine)
-        nn.ffn_counter+=1
+        nn.ffn_counter += 1
         if testing:
             return element, nlb[-1], nub[-1]
         return element
@@ -260,8 +181,7 @@ class DeeppolyNonlinearity:
             iterable of ints with the shape of the output of this node
         """
         add_input_output_information_deeppoly(self, input_names, output_name, output_shape)
-    
-    
+
     def get_arguments(self, man, element):
         """
         used by the children of this class to easily get the inputs for their transformers
@@ -282,10 +202,9 @@ class DeeppolyNonlinearity:
         return man, element, length, self.predecessors, len(self.predecessors)
 
 
-
-
 class DeeppolyReluNode(DeeppolyNonlinearity):
-    def transformer(self, nn, man, element, nlb, nub, relu_groups, refine, timeout_lp, timeout_milp, use_default_heuristic, testing, K=3, s=-2, use_milp=False, approx=True):
+    def transformer(self, nn, man, element, nlb, nub, relu_groups, refine, timeout_lp, timeout_milp,
+                    use_default_heuristic, testing, K=3, s=-2, use_milp=False, approx=config.approx_k):
         """
         transforms element with handle_relu_layer
         
@@ -309,16 +228,16 @@ class DeeppolyReluNode(DeeppolyNonlinearity):
         else:
             handle_relu_layer(*self.get_arguments(man, element), use_default_heuristic)
         calc_bounds(man, element, nn, nlb, nub, relu_groups, is_refine_layer=True, use_krelu=False)
-        nn.activation_counter+=1
+        nn.activation_counter += 1
         if testing:
             return element, nlb[-1], nub[-1]
 
         return element
- 
+
 
 class DeeppolySignNode(DeeppolyNonlinearity):
     def transformer(self, nn, man, element, nlb, nub, relu_groups, refine, timeout_lp, timeout_milp,
-                    use_default_heuristic, testing, K=3, s=-2, approx=True):
+                    use_default_heuristic, testing, K=3, s=-2, approx=config.approx_k):
         """
         transforms element with handle_sign_layer
         
@@ -334,12 +253,12 @@ class DeeppolySignNode(DeeppolyNonlinearity):
         output : ElinaAbstract0Ptr
             abstract element after the transformer
         """
-        #if refine:
+        # if refine:
         #    refine_activation_with_solver_bounds(nn, self, man, element, nlb, nub, relu_groups, timeout_lp, timeout_milp, use_default_heuristic, 'deeppoly')
-        #else:
+        # else:
         handle_sign_layer(*self.get_arguments(man, element))
         calc_bounds(man, element, nn, nlb, nub, relu_groups, is_refine_layer=True, use_krelu=False)
-        nn.activation_counter+=1
+        nn.activation_counter += 1
         if testing:
             return element, nlb[-1], nub[-1]
 
@@ -347,7 +266,8 @@ class DeeppolySignNode(DeeppolyNonlinearity):
 
 
 class DeeppolySigmoidNode(DeeppolyNonlinearity):
-    def transformer(self, nn, man, element, nlb, nub, relu_groups, refine, timeout_lp, timeout_milp, use_default_heuristic, testing, K=3, s=-2, use_milp=False, approx=True):
+    def transformer(self, nn, man, element, nlb, nub, relu_groups, refine, timeout_lp, timeout_milp,
+                    use_default_heuristic, testing, K=3, s=-2, use_milp=False, approx=config.approx_k):
         """
         transforms element with handle_sigmoid_layer
         
@@ -365,19 +285,22 @@ class DeeppolySigmoidNode(DeeppolyNonlinearity):
         """
         length = self.output_length
         if refine:
-            refine_activation_with_solver_bounds(nn, self, man, element, nlb, nub, relu_groups, timeout_lp, timeout_milp, use_default_heuristic, 'deeppoly', K=K, s=s, use_milp=use_milp)
+            refine_activation_with_solver_bounds(nn, self, man, element, nlb, nub, relu_groups, timeout_lp,
+                                                 timeout_milp, use_default_heuristic, 'deeppoly', K=K, s=s,
+                                                 use_milp=use_milp)
         else:
             handle_sigmoid_layer(*self.get_arguments(man, element), use_default_heuristic)
         calc_bounds(man, element, nn, nlb, nub, relu_groups, is_refine_layer=True, use_krelu=refine)
-        nn.activation_counter+=1
+        nn.activation_counter += 1
         if testing:
             return element, nlb[-1], nub[-1]
 
         return element
-        
-        
+
+
 class DeeppolyTanhNode(DeeppolyNonlinearity):
-    def transformer(self, nn, man, element, nlb, nub, relu_groups, refine, timeout_lp, timeout_milp, use_default_heuristic, testing, K=3, s=-2, use_milp=False, approx=True):
+    def transformer(self, nn, man, element, nlb, nub, relu_groups, refine, timeout_lp, timeout_milp,
+                    use_default_heuristic, testing, K=3, s=-2, use_milp=False, approx=config.approx_k):
         """
         transforms element with handle_tanh_layer
         
@@ -394,13 +317,15 @@ class DeeppolyTanhNode(DeeppolyNonlinearity):
             abstract element after the transformer
         """
         length = self.output_length
-        
+
         if refine:
-            refine_activation_with_solver_bounds(nn, self, man, element, nlb, nub, relu_groups, timeout_lp, timeout_milp, use_default_heuristic, 'deeppoly',K=K, s=s, use_milp=use_milp)
+            refine_activation_with_solver_bounds(nn, self, man, element, nlb, nub, relu_groups, timeout_lp,
+                                                 timeout_milp, use_default_heuristic, 'deeppoly', K=K, s=s,
+                                                 use_milp=use_milp)
         else:
             handle_tanh_layer(*self.get_arguments(man, element), use_default_heuristic)
         calc_bounds(man, element, nn, nlb, nub, relu_groups, is_refine_layer=True, use_krelu=refine)
-        nn.activation_counter+=1
+        nn.activation_counter += 1
         if testing:
             return element, nlb[-1], nub[-1]
 
@@ -408,7 +333,8 @@ class DeeppolyTanhNode(DeeppolyNonlinearity):
 
 
 class DeeppolyLeakyReluNode(DeeppolyNonlinearity):
-    def transformer(self, nn, man, element, nlb, nub, relu_groups, refine, timeout_lp, timeout_milp, use_default_heuristic, testing, alpha=0.01):
+    def transformer(self, nn, man, element, nlb, nub, relu_groups, refine, timeout_lp, timeout_milp,
+                    use_default_heuristic, testing, alpha=0.01):
         """
         transforms element with handle_tanh_layer
         
@@ -425,20 +351,23 @@ class DeeppolyLeakyReluNode(DeeppolyNonlinearity):
             abstract element after the transformer
         """
         length = self.output_length
-        
+
         if False:
-            refine_activation_with_solver_bounds(nn, self, man, element, nlb, nub, relu_groups, timeout_lp, timeout_milp, use_default_heuristic, 'deeppoly')
+            refine_activation_with_solver_bounds(nn, self, man, element, nlb, nub, relu_groups, timeout_lp,
+                                                 timeout_milp, use_default_heuristic, 'deeppoly')
         else:
             handle_leakyrelu_layer(*self.get_arguments(man, element), alpha, use_default_heuristic)
         calc_bounds(man, element, nn, nlb, nub, relu_groups, is_refine_layer=True, use_krelu=refine)
-        nn.activation_counter+=1
+        nn.activation_counter += 1
         if testing:
             return element, nlb[-1], nub[-1]
 
         return element
 
+
 class DeeppolyConv2dNode:
-    def __init__(self, filters, strides, pad_top, pad_left, pad_bottom, pad_right, bias, image_shape, input_names, output_name, output_shape):
+    def __init__(self, filters, strides, pad_top, pad_left, pad_bottom, pad_right, bias, image_shape, input_names,
+                 output_name, output_shape):
         """
         collects the information needed for the conv_handle_intermediate_relu_layer transformer and brings it into the required shape
         
@@ -453,13 +382,17 @@ class DeeppolyConv2dNode:
         image_shape : numpy.ndarray
             1D array of ints with 3 entries [height, width, channels] representing the shape of the of the image that is passed to the conv-layer
         """
+
         self.image_shape = np.ascontiguousarray(image_shape, dtype=np.uintp)
-        self.filters     = np.ascontiguousarray(filters, dtype=np.double)
-        self.strides     = np.ascontiguousarray(strides, dtype=np.uintp)
-        self.bias        = np.ascontiguousarray(bias, dtype=np.double)
-        self.out_size    = (c_size_t * 3)(output_shape[1], output_shape[2], output_shape[3]) 
-        self.pad_top     = pad_top
-        self.pad_left    = pad_left
+        self.filters = np.ascontiguousarray(filters, dtype=np.double)
+
+        self.strides = np.ascontiguousarray(strides, dtype=np.uintp)
+        self.bias = np.ascontiguousarray(bias, dtype=np.double)
+
+        self.out_size = (c_size_t * 3)(output_shape[1], output_shape[2], output_shape[3])
+
+        self.pad_top = pad_top
+        self.pad_left = pad_left
         self.pad_bottom = pad_bottom
         self.pad_right = pad_right
         add_input_output_information_deeppoly(self, input_names, output_name, output_shape)
@@ -478,13 +411,25 @@ class DeeppolyConv2dNode:
                 4. length of a side of the square kernel (int)
                 5. number of filters (int)
         """
-        filter_size = (c_size_t * 2) (self.filters.shape[0], self.filters.shape[1])
-        numfilters  = self.filters.shape[3]
-        strides     = (c_size_t * 2)(self.strides[0], self.strides[1])
-        return self.filters, self.bias, self.image_shape, filter_size, numfilters, strides, self.out_size, self.pad_top, self.pad_left, self.pad_bottom, self.pad_right, True, self.predecessors, len(self.predecessors)
+        filter_size = (c_size_t * 2)(self.filters.shape[0], self.filters.shape[1])
+        numfilters = self.filters.shape[3]
+        strides = (c_size_t * 2)(self.strides[0], self.strides[1])
+        # print(self.filters.shape)
+        # print(self.bias.shape)
+        # print(self.image_shape)
+        # print(self.filters.shape[0], self.filters.shape[1])
+        # print(numfilters)
+        # print(strides[0], strides[1])
+        # print(self.out_size[0], self.out_size[1], self.out_size[2])
+        # print(self.pad_top, self.pad_left, self.pad_bottom, self.pad_right)
+        # print(self.predecessors[0])
 
+        return self.filters, self.bias, self.image_shape, filter_size, numfilters, strides, self.out_size, \
+            self.pad_top, self.pad_left, self.pad_bottom, self.pad_right, True, self.predecessors, len(
+            self.predecessors)
 
-    def transformer(self, nn, man, element, nlb, nub, relu_groups, refine, timeout_lp, timeout_milp, use_default_heuristic, testing):
+    def transformer(self, nn, man, element, nlb, nub, relu_groups, refine, timeout_lp, timeout_milp,
+                    use_default_heuristic, testing):
         """
         transformer for a convolutional layer, if that layer is an intermediate of the network
         
@@ -500,9 +445,10 @@ class DeeppolyConv2dNode:
         output : ElinaAbstract0Ptr
             abstract element after the transformer 
         """
+
         handle_convolutional_layer(man, element, *self.get_arguments())
         calc_bounds(man, element, nn, nlb, nub, relu_groups, is_refine_layer=True)
-        nn.conv_counter+=1
+        nn.conv_counter += 1
         if testing:
             return element, nlb[-1], nub[-1]
         return element
@@ -525,7 +471,7 @@ class DeeppolyPaddingNode:
         image_shape : numpy.ndarray
             1D array of ints with 3 entries [height, width, channels] representing the shape of the of the image that is passed to the conv-layer
         """
-        self.image_shape =  np.ascontiguousarray(image_shape, dtype=np.uintp)
+        self.image_shape = np.ascontiguousarray(image_shape, dtype=np.uintp)
         self.out_size = (c_size_t * 3)(output_shape[1], output_shape[2], output_shape[3])
         self.pad_top = pad_top
         self.pad_left = pad_left
@@ -544,7 +490,7 @@ class DeeppolyPaddingNode:
                 3. the image_shape (numpy.ndarray)
         """
         return self.image_shape, self.out_size, self.pad_top, self.pad_left, self.pad_bottom, self.pad_right, \
-               self.predecessors, len(self.predecessors)
+            self.predecessors, len(self.predecessors)
 
     def transformer(self, nn, man, element, nlb, nub, relu_groups, refine, timeout_lp, timeout_milp,
                     use_default_heuristic, testing):
@@ -570,8 +516,10 @@ class DeeppolyPaddingNode:
             return element, nlb[-1], nub[-1]
         return element
 
+
 class DeeppolyPoolNode:
-    def __init__(self, input_shape, window_size, strides, pad_top, pad_left, pad_bottom, pad_right, input_names, output_name, output_shape, is_maxpool):
+    def __init__(self, input_shape, window_size, strides, pad_top, pad_left, pad_bottom, pad_right, input_names,
+                 output_name, output_shape, is_maxpool):
         """
         collects the information needed for the handle_pool_layer transformer and brings it into the required shape
         
@@ -591,12 +539,12 @@ class DeeppolyPoolNode:
         self.pad_left = pad_left
         self.pad_bottom = pad_bottom
         self.pad_right = pad_right
-        self.output_shape = (c_size_t * 3)(output_shape[1],output_shape[2],output_shape[3])
+        self.output_shape = (c_size_t * 3)(output_shape[1], output_shape[2], output_shape[3])
         self.is_maxpool = is_maxpool
         add_input_output_information_deeppoly(self, input_names, output_name, output_shape)
 
-
-    def transformer(self, nn, man, element, nlb, nub, relu_groups, refine, timeout_lp, timeout_milp, use_default_heuristic, testing):
+    def transformer(self, nn, man, element, nlb, nub, relu_groups, refine, timeout_lp, timeout_milp,
+                    use_default_heuristic, testing):
         """
         transformer for a maxpool/averagepool layer, this can't be the first layer of a network
         
@@ -614,8 +562,11 @@ class DeeppolyPoolNode:
         """
         h, w = self.window_size
         H, W, C = self.input_shape
-        #assert self.pad_top==self.pad_bottom==self.pad_right==self.pad_left==0, "Padded pooling not implemented"
-        handle_pool_layer(man, element, (c_size_t *3)(h,w,1), (c_size_t *3)(H, W, C), (c_size_t *2)(self.strides[0], self.strides[1]), self.pad_top, self.pad_left, self.pad_bottom, self.pad_right, self.output_shape, self.predecessors, len(self.predecessors), self.is_maxpool)
+        # assert self.pad_top==self.pad_bottom==self.pad_right==self.pad_left==0, "Padded pooling not implemented"
+        handle_pool_layer(man, element, (c_size_t * 3)(h, w, 1), (c_size_t * 3)(H, W, C),
+                          (c_size_t * 2)(self.strides[0], self.strides[1]), self.pad_top, self.pad_left,
+                          self.pad_bottom, self.pad_right, self.output_shape, self.predecessors, len(self.predecessors),
+                          self.is_maxpool)
         calc_bounds(man, element, nn, nlb, nub, relu_groups, is_refine_layer=True, destroy=False)
         nn.pool_counter += 1
         if testing:
@@ -637,8 +588,9 @@ class DeeppolyResidualNode:
         """
         add_input_output_information_deeppoly(self, input_names, output_name, output_shape)
 
-    def transformer(self, nn, man, element, nlb, nub, relu_groups, refine, timeout_lp, timeout_milp, use_default_heuristic, testing):
-        handle_residual_layer(man,element,self.output_length,self.predecessors, len(self.predecessors))
+    def transformer(self, nn, man, element, nlb, nub, relu_groups, refine, timeout_lp, timeout_milp,
+                    use_default_heuristic, testing):
+        handle_residual_layer(man, element, self.output_length, self.predecessors, len(self.predecessors))
         calc_bounds(man, element, nn, nlb, nub, relu_groups, use_krelu=refine, is_refine_layer=True)
         # print("Residual ", nn.layertypes[layerno],layerno)
         nn.residual_counter += 1
@@ -665,7 +617,8 @@ class DeeppolyGather:
         self.indexes = np.ascontiguousarray(indexes, dtype=np.uintp)
         add_input_output_information_deeppoly(self, input_names, output_name, output_shape)
 
-    def transformer(self, nn, man, element, nlb, nub, relu_groups, refine, timeout_lp, timeout_milp, use_default_heuristic, testing):
+    def transformer(self, nn, man, element, nlb, nub, relu_groups, refine, timeout_lp, timeout_milp,
+                    use_default_heuristic, testing):
         handle_gather_layer(man, element, self.indexes)
         return element
 
@@ -679,8 +632,8 @@ class DeeppolyConcat:
         for i, channel in enumerate(channels):
             self.channels[i] = channel
 
-
-    def transformer(self, nn, man, element, nlb, nub, relu_groups, refine, timeout_lp, timeout_milp, use_default_heuristic, testing):
+    def transformer(self, nn, man, element, nlb, nub, relu_groups, refine, timeout_lp, timeout_milp,
+                    use_default_heuristic, testing):
         handle_concatenation_layer(man, element, self.predecessors, len(self.predecessors), self.channels)
         calc_bounds(man, element, nn, nlb, nub, relu_groups, is_refine_layer=True, destroy=False)
         nn.concat_counter += 1
@@ -694,7 +647,8 @@ class DeeppolyTile:
         add_input_output_information_deeppoly(self, input_names, output_name, output_shape)
         self.repeats = repeats
 
-    def transformer(self, nn, man, element, nlb, nub, relu_groups, refine, timeout_lp, timeout_milp, use_default_heuristic, testing):
+    def transformer(self, nn, man, element, nlb, nub, relu_groups, refine, timeout_lp, timeout_milp,
+                    use_default_heuristic, testing):
         handle_tiling_layer(man, element, self.predecessors, len(self.predecessors), self.repeats)
         calc_bounds(man, element, nn, nlb, nub, relu_groups, is_refine_layer=True, destroy=False)
         nn.tile_counter += 1
@@ -721,12 +675,14 @@ class DeeppolySubNode:
         self.is_minuend = is_minuend
         add_input_output_information_deeppoly(self, input_names, output_name, output_shape)
 
-    def transformer(self, nn, man, element, nlb, nub, relu_groups, refine, timeout_lp, timeout_milp, use_default_heuristic, testing):
+    def transformer(self, nn, man, element, nlb, nub, relu_groups, refine, timeout_lp, timeout_milp,
+                    use_default_heuristic, testing):
         layerno = nn.calc_layerno()
         num_neurons = get_num_neurons_in_layer(man, element, layerno)
-        handle_sub_layer(man, element, self.bias, self.is_minuend, num_neurons, self.predecessors, len(self.predecessors))
+        handle_sub_layer(man, element, self.bias, self.is_minuend, num_neurons, self.predecessors,
+                         len(self.predecessors))
         calc_bounds(man, element, nn, nlb, nub, relu_groups, is_refine_layer=True)
-        nn.ffn_counter+=1
+        nn.ffn_counter += 1
         if testing:
             return element, nlb[-1], nub[-1]
         return element
@@ -749,10 +705,11 @@ class DeeppolyMulNode:
         self.bias = np.ascontiguousarray(bias.reshape(-1), dtype=np.float64)
         add_input_output_information_deeppoly(self, input_names, output_name, output_shape)
 
-    def transformer(self, nn, man, element, nlb, nub, relu_groups, refine, timeout_lp, timeout_milp, use_default_heuristic, testing):
+    def transformer(self, nn, man, element, nlb, nub, relu_groups, refine, timeout_lp, timeout_milp,
+                    use_default_heuristic, testing):
         handle_mul_layer(man, element, self.bias, len(self.bias.reshape(-1)), self.predecessors, len(self.predecessors))
         calc_bounds(man, element, nn, nlb, nub, relu_groups, is_refine_layer=True)
-        nn.ffn_counter+=1
+        nn.ffn_counter += 1
         if testing:
             return element, nlb[-1], nub[-1]
         return element

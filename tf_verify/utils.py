@@ -1,4 +1,5 @@
 import re
+
 import numpy as np
 
 
@@ -14,10 +15,10 @@ def identify_var(var_string):
 
 def check_numeric(var_string):
     match = re.match("([\-,\+]*)([0-9]*(\.[0-9]*)?)", var_string)
-    if match is None or len(match.group(2))==0 or match.group(2) is None:
+    if match is None or len(match.group(2)) == 0 or match.group(2) is None:
         return None
     else:
-        sign = -1 if match.group(1)=="-" else 1
+        sign = -1 if match.group(1) == "-" else 1
         return sign * float(match.group(2))
 
 
@@ -167,65 +168,66 @@ def parse_vnn_lib_prop(file_path):
 def translate_output_constraints(C_out):
     and_list = []
     for i in range(C_out.shape[0]):
-        numeric = C_out[i,-1]
+        numeric = C_out[i, -1]
         if numeric != 0:
             l_label = (C_out[i, 0:-1] == -1).nonzero()
             g_label = (C_out[i, 0:-1] == 1).nonzero()
             assert len(l_label) == 1 + len(g_label) == 1
-            if len(l_label)>0:
+            if len(l_label) > 0:
                 raise NotImplementedError
             else:
                 and_list.append([(l_label, -1, numeric)])
         else:
-            l_label = (C_out[i,0:-1]==-1).nonzero()[0]
-            g_label = (C_out[i,0:-1]==1).nonzero()[0]
-            assert len(l_label)==1 and len(g_label)==1
+            l_label = (C_out[i, 0:-1] == -1).nonzero()[0]
+            g_label = (C_out[i, 0:-1] == 1).nonzero()[0]
+            assert len(l_label) == 1 and len(g_label) == 1
             and_list.append([(g_label[0], l_label[0], 0)])
     return and_list
 
 
 def translate_input_to_box(C_lb, C_ub, x_0=None, eps=None, domain_bounds=None):
     n_x = C_lb.shape[0]
-    x=[]
+    x = []
     if x_0 is not None:
         if len(x_0) == 1:
-            x_0 = np.ones(n_x)*x_0
+            x_0 = np.ones(n_x) * x_0
         else:
-            assert len(x_0)==n_x
+            assert len(x_0) == n_x
             x_0 = np.array(x_0)
-        n_e = C_lb.shape[1]-1-n_x
+        n_e = C_lb.shape[1] - 1 - n_x
         x.append(x_0)
     else:
-        n_e = C_lb.shape[1]-1-n_x
+        n_e = C_lb.shape[1] - 1 - n_x
 
     if eps is not None:
         if len(eps) == 1:
-            eps = np.ones(n_e)*eps
+            eps = np.ones(n_e) * eps
         else:
-            assert len(eps)==n_e
+            assert len(eps) == n_e
             eps = np.array(eps)
         x.append(eps)
 
     x.append(np.array([1.]))
-    lb = np.matmul(C_lb,np.concatenate(x,axis=0))
+    lb = np.matmul(C_lb, np.concatenate(x, axis=0))
     ub = np.matmul(C_ub, np.concatenate(x, axis=0))
 
     if domain_bounds is not None:
         d_lb, d_ub = domain_bounds
         if len(d_lb) == 1:
-            d_lb = np.ones(n_x)*d_lb
+            d_lb = np.ones(n_x) * d_lb
         else:
-            assert len(d_lb)==n_x
+            assert len(d_lb) == n_x
             d_lb = np.array(d_lb)
         if len(d_ub) == 1:
-            d_ub = np.ones(n_x)*d_ub
+            d_ub = np.ones(n_x) * d_ub
         else:
-            assert len(d_ub)==n_x
+            assert len(d_ub) == n_x
             d_ub = np.array(d_ub)
 
         lb = np.maximum(lb, d_lb)
         ub = np.minimum(lb, d_ub)
     return [[(lb[i], ub[i]) for i in range(n_x)]]
+
 
 def negate_cstr_or_list_old(or_list):
     neg_and_list = []
@@ -233,14 +235,15 @@ def negate_cstr_or_list_old(or_list):
         (i, j, k) = is_greater_tuple
 
         if i == -1:  # var[j] > k
-            neg_and_list.append([(j,-1,k)])
+            neg_and_list.append([(j, -1, k)])
         elif j == -1:  # var[i] < k
-            neg_and_list.append([(-1,i,k)])
+            neg_and_list.append([(-1, i, k)])
         elif i != j:  # var[i] > var[j]
-            neg_and_list.append([(j,i,-k)])
+            neg_and_list.append([(j, i, -k)])
         else:
             assert False, f"invalid constraint encountered {is_greater_tuple}"
     return neg_and_list
+
 
 def translate_gurobi_status(status_id):
     gurobi_status_dict = {
@@ -259,5 +262,5 @@ def translate_gurobi_status(status_id):
         13: "SUBOPTIMAL",
         14: "INPROGRESS",
         15: "USER_OBJ_LIMIT",
-        }
+    }
     return gurobi_status_dict[status_id]

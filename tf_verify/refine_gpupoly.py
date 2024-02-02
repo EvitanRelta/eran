@@ -1,249 +1,275 @@
-from optimizer import *
 from krelu import *
-import time
+from optimizer import *
 
-def refine_gpupoly_results(nn, network, num_gpu_layers, relu_layers, true_label, labels_to_be_verified, K=3, s=-2,
-                           timeout_lp=10, timeout_milp=10, timeout_final_lp=100, timeout_final_milp=100, use_milp=False,
-                           partial_milp=False, max_milp_neurons=30, complete=False, approx=True):
-    relu_groups = []
-    nlb = []
-    nub = []
-    #print("INPUT SIZE ", network._lib.getOutputSize(network._nn, 0))
-    layerno = 2
-    new_relu_layers = []
-    for l in range(nn.numlayer):
-        num_neurons = network._lib.getOutputSize(network._nn, layerno)
-        #print("num neurons ", num_neurons)
-        if layerno in relu_layers:
-            pre_lbi = nlb[len(nlb)-1]
-            pre_ubi = nub[len(nub)-1]
-            lbi = np.zeros(num_neurons)
-            ubi = np.zeros(num_neurons)
-            for j in range(num_neurons):
-                lbi[j] = max(0,pre_lbi[j])
-                ubi[j] = max(0,pre_ubi[j])
-            layerno =  layerno+2
-            new_relu_layers.append(len(nlb))
-            #print("RELU ")
-        else:
-            #print("COMING HERE")
-            #A = np.zeros((num_neurons,num_neurons), dtype=np.double)
-            #print("FINISHED ", num_neurons)
-            #for j in range(num_neurons):
-            #    A[j][j] = 1
-            bounds = network.evalAffineExpr(layer=layerno)
-            #print("num neurons", num_neurons)
-            lbi = bounds[:,0]
-            ubi = bounds[:,1]
-            layerno = layerno+1
-        nlb.append(lbi)
-        nub.append(ubi)
 
-    second_FC = -2
-    for i in range(nn.numlayer):
-        if nn.layertypes[i] == 'FC':
-            if second_FC == -2:
-                second_FC = -1
+class GPUPolyAnalyzer():
+    def __init__(self, nn, network, gpu_relu_layers):
+        self.nn = nn
+        self.network = network
+        self.gpu_relu_layers = gpu_relu_layers
+        self.nlb = None
+        self.nub = None
+        self.relu_layer_idxes = None
+        self.layer_idx_second_fc = None
+
+    def get_second_fc_layer_idx(self):
+        counter = 0
+        for i in range(self.nn.numlayer):
+            if self.nn.layertypes[i] == 'FC':
+                counter += 1
+                if counter == 2:
+                    self.layer_idx_second_fc = i
+                    return i
+        assert counter == 2, "The network should have at least two FC layers"
+
+    def get_all_neuron_bounds(self):
+        nlb, nub, relu_layer_idxes = [], [], []
+        layer_idx = 2
+        for i in range(self.nn.numlayer):
+            if layer_idx not in self.gpu_relu_layers:
+                bounds = self.network.evalAffineExpr(layer=layer_idx)
+                lbi, ubi = bounds[:, 0], bounds[:, 1]
+                layer_idx += 1
             else:
-                second_FC = i
-                break
+                lbi, ubi = np.maximum(nlb[-1], 0), np.maximum(nub[-1], 0)
+                relu_layer_idxes.append(len(nlb))
+                layer_idx += 2
+            nlb.append(lbi)
+            nub.append(ubi)
+        self.nlb, self.nub, self.relu_layer_idxes = nlb, nub, relu_layer_idxes
 
-    index = 0 
-    for l in relu_layers:
-        gpu_layer = l - 1
-        layerno = new_relu_layers[index]
-        index = index+1
+        return nlb, nub, relu_layer_idxes
 
-        if config.refine_neurons==True:
-            predecessor_index = nn.predecessors[layerno + 1][0] - 1
-            if predecessor_index == second_FC:
-                use_milp_temp = use_milp
-                timeout = timeout_milp
-            else:
-                use_milp_temp = False
-                timeout = timeout_lp
-            length = len(nlb[predecessor_index])
+    def refine_neuron_bounds(self, relu_groups, layer_idx, layer_idx_second_fc):
+        warnings.warn("Refinement of bounds is not implemented yet")
+        pre_idx = self.nn.predecessors[layer_idx + 1][0] - 1
+        lbi, ubi = self.nlb[pre_idx], self.nub[pre_idx]
+        neurons_num = len(lbi)
 
-            candidate_vars = []
-            for i in range(length):
-                if ((nlb[predecessor_index][i] < 0 and nub[predecessor_index][i] > 0) or (nlb[predecessor_index][i] > 0)):
-                    candidate_vars.append(i)
+        candidate_vars = [i for i in range(neurons_num) if lbi[i] < 0 < ubi[i] or lbi[i] > 0]
 
-            start = time.time()
-            resl, resu, indices = get_bounds_for_layer_with_milp(nn, nn.specLB, nn.specUB, predecessor_index,
-                                                                 predecessor_index, length, nlb, nub, relu_groups,
-                                                                 use_milp_temp,  candidate_vars, timeout)
-            end = time.time()
-            if config.debug:
-                print(f"Refinement of bounds time: {end-start:.3f}. MILP used: {use_milp_temp}")
-            nlb[predecessor_index] = resl
-            nub[predecessor_index] = resu
+        use_milp_temp = config.use_milp if pre_idx == layer_idx_second_fc else False
+        timeout = config.timeout_milp if pre_idx == layer_idx_second_fc else config.timeout_lp
 
-        lbi = nlb[layerno-1]
-        ubi = nub[layerno-1]
-        #print("LBI ", lbi, "UBI ", ubi, "specLB")
-        num_neurons = len(lbi)
+        start = time.time()
+        resl, resu, indices = get_bounds_for_layer_with_milp(self.nn, self.nn.specLB, self.nn.specUB, pre_idx,
+                                                             pre_idx, neurons_num, self.nlb, self.nub, relu_groups,
+                                                             use_milp_temp, candidate_vars, timeout)
+        end = time.time()
+        print(f"Refinement of bounds time: {end - start:.3f}. MILP used: {use_milp_temp}")
+        self.nlb[pre_idx], self.nub[pre_idx] = resl, resu
 
-        kact_args = sparse_heuristic_with_cutoff(num_neurons, lbi, ubi, K=K, s=s)
-        kact_cons = []
-        total_size = 0
-        for varsid in kact_args:
-            size = 3**len(varsid) - 1
-            total_size = total_size + size
-        #print("total size ", total_size, kact_args)
+        return self.nlb, self.nub
+
+    @staticmethod
+    def _init_input_constrs(kact_args, num_neurons, candidate_coeffs):
+
+        total_size = sum(len(candidate_coeffs) ** len(varsid) - 1 for varsid in kact_args)
         A = np.zeros((total_size, num_neurons), dtype=np.double)
         i = 0
-        #print("total_size ", total_size)
         for varsid in kact_args:
-            for coeffs in itertools.product([-1, 0, 1], repeat=len(varsid)):
+            for coeffs in itertools.product(candidate_coeffs, repeat=len(varsid)):
                 if all(c == 0 for c in coeffs):
                     continue
-                for j in range(len(varsid)):
-                    A[i][varsid[j]] = coeffs[j] 
-               
-                i = i + 1
-        bounds=np.zeros(shape=(0, 2))
-        max_eqn_per_call = 500
-        for i_a in range((int)(np.ceil(A.shape[0] / max_eqn_per_call))):
-            A_temp = A[i_a*max_eqn_per_call:(i_a+1)*max_eqn_per_call]
-            bounds_temp = network.evalAffineExpr(A_temp, layer=gpu_layer, back_substitute=network.FULL_BACKSUBSTITUTION, dtype=np.double)
+                A[i, varsid] = np.asarray(coeffs)
+                i += 1
+        return A
+
+    @staticmethod
+    def _cal_input_constrs_bias(input_constrs, network, gpu_layer_idx):
+        max_eqn_per_call = 1024
+        bounds = np.zeros(shape=(0, 2))
+        for i_a in range((int)(np.ceil(input_constrs.shape[0] / max_eqn_per_call))):
+            temp = input_constrs[i_a * max_eqn_per_call:(i_a + 1) * max_eqn_per_call]
+            bounds_temp = network.evalAffineExpr(temp, layer=gpu_layer_idx,
+                                                 back_substitute=network.FULL_BACKSUBSTITUTION,
+                                                 dtype=np.double)
             bounds = np.concatenate([bounds, bounds_temp], axis=0)
-        upper_bound = bounds[:,1]
-        i=0
-        input_hrep_array = []
-        for varsid in kact_args:
-            input_hrep = []
-            for coeffs in itertools.product([-1, 0, 1], repeat=len(varsid)):
+        upper_bounds = bounds[:, 1]
+
+        return upper_bounds
+
+    @staticmethod
+    def _get_input_contrs(neuron_idxes_grouped, candidate_coeffs, bias, lb, ub):
+
+        input_constrs_grouped, lbs_grouped, ubs_grouped = [], [], []
+        i = 0
+        for neuron_idxes in neuron_idxes_grouped:
+            input_constrs = []
+            for coeffs in itertools.product(candidate_coeffs, repeat=len(neuron_idxes)):
                 if all(c == 0 for c in coeffs):
                     continue
-                input_hrep.append([upper_bound[i]] + [-c for c in coeffs])
-                i = i + 1
-            input_hrep_array.append(input_hrep)
+                input_constrs.append([bias[i]] + [-c for c in coeffs])
+                i += 1
+            input_constrs_grouped.append(input_constrs)
+            lbs_grouped.append([lb[idx] for idx in neuron_idxes])
+            ubs_grouped.append([ub[idx] for idx in neuron_idxes])
+
+        return input_constrs_grouped, lbs_grouped, ubs_grouped
+
+    def encode_kact_constraints(self, neurons_grouped, gpu_layer, lb, ub):
+        kact_objs = []
+
+        # Initialize input constraints
+        coeffs = [-1, 0, 1]
+        input_constrs_A = self._init_input_constrs(neurons_grouped, len(lb), coeffs)
+        input_constrs_b = self._cal_input_constrs_bias(input_constrs_A, self.network, gpu_layer)
+
+        # Construct input constraints
+        input_hrep_grouped, lbs_grouped, ubs_grouped = self._get_input_contrs(neurons_grouped, coeffs, input_constrs_b,
+                                                                              lb, ub)
+
         KAct.type = "ReLU"
+
+        start = time.time()
         with multiprocessing.Pool(config.numproc) as pool:
-            # kact_results = pool.map(make_kactivation_obj, input_hrep_array)
-            kact_results = list(pool.starmap(make_kactivation_obj, zip(input_hrep_array, len(input_hrep_array) * [approx])))
+            kact_constrs_grouped = list(pool.starmap(make_kactivation_obj,
+                                                     zip(input_hrep_grouped,
+                                                         lbs_grouped,
+                                                         ubs_grouped,
+                                                         [config.approx_k] * len(input_hrep_grouped))))
+        time_convex_hull = time.time() - start
 
-        gid = 0
-        for inst in kact_results:
-            varsid = kact_args[gid]
-            inst.varsid = varsid
-            kact_cons.append(inst)
-            gid = gid+1
-        relu_groups.append(kact_cons)
+        groups_num = constrs_num = coeffs_num_total = coeffs_num_zero = 0
+        for gid, inst in enumerate(kact_constrs_grouped):
+            if inst.cons is None:
+                continue
 
-    if complete:
-        start_milp = time.time()
-        counter, var_list, model = create_model(nn, nn.specLB, nn.specUB, nlb, nub, relu_groups, nn.numlayer,
-                                                use_milp=True, is_nchw=True, partial_milp=-1, max_milp_neurons=1e6)
-        #model.setParam(GRB.Param.TimeLimit, timeout_final_milp) #set later
-    else:
-        counter, var_list, model = create_model(nn, nn.specLB, nn.specUB, nlb, nub, relu_groups, nn.numlayer,
-                                                use_milp=False, is_nchw=True)
-        model.setParam(GRB.Param.TimeLimit, timeout_final_lp)
+            inst.varsid = neurons_grouped[gid]
+            kact_objs.append(inst)
 
-    model.setParam(GRB.Param.Cutoff, 0.01)
+            if inst.cons.shape[0] == 3:
+                continue
+            groups_num += 1
+            constrs_num += inst.cons.shape[0]
+            coeffs_num = inst.cons.shape[0] * (inst.cons.shape[1] - 1)  # Count the non-zero coefficients in inst.cons
+            coeffs_num_total += coeffs_num
+            coeffs_num_zero += coeffs_num - np.count_nonzero(inst.cons[:, :-1])
 
-    if partial_milp != 0 and not complete:
-        nn.ffn_counter = 0
-        nn.conv_counter = 0
-        nn.pool_counter = 0
-        nn.concat_counter = 0
-        nn.tile_counter = 0
-        nn.residual_counter = 0
-        nn.activation_counter = 0
-        counter_partial_milp, var_list_partial_milp, model_partial_milp = create_model(nn, nn.specLB, nn.specUB, nlb,
-                                                                                       nub, relu_groups, nn.numlayer,
-                                                                                       complete, is_nchw=True,
-                                                                                       partial_milp=partial_milp,
-                                                                                       max_milp_neurons=max_milp_neurons)
-        model_partial_milp.setParam(GRB.Param.TimeLimit, timeout_final_milp)
-        model_partial_milp.setParam(GRB.Param.Cutoff, 0.01)
+        # Record
+        logger = Logger.current_logger
+        if logger is not None:
+            logger.record_kact(time_convex_hull, constrs_num, coeffs_num_total, coeffs_num_zero, groups_num)
 
-        # a1=time.time()
-        # model_partial_milp.optimize()
-        # if model_partial_milp.Status==3:
-        #     model_partial_milp.setParam(GRB.Param.FeasibilityTol, 1e-4)
-        #     print(f"Infeasible model encountered. Increased tolerance")
-        # a2=time.time()
-        # print(f"time for feasibility check: {a2-a1:.3f}")
+        print(f"\tCal convex hull/approx...{time_convex_hull:.4f}s ")
+        return kact_objs
 
-    # num_var = len(var_list)
-    #output_size = num_var - counter
-    #print("TIMEOUT ", config.timeout_lp)
+    def create_gurobi_model(self, relu_groups):
+        nn, nlb, nub = self.nn, self.nlb, self.nub
+        # if config.complete:
+        #     counter, var_list, model = create_model(nn, nn.specLB, nn.specUB, nlb, nub, relu_groups, nn.numlayer,
+        #                                             use_milp=True, is_nchw=True, partial_milp=-1, max_milp_neurons=1e6)
+        #     # model.setParam(GRB.Param.TimeLimit, timeout_final_milp) #set later
+        # else:
+        grb_var_counter, grb_vars, model, kact_constrs = create_model(nn, nn.specLB, nn.specUB, nlb, nub, relu_groups,
+                                                                      nn.numlayer, use_milp=False, is_nchw=True)
+        model.setParam(GRB.Param.TimeLimit, 1000)
+        model.setParam(GRB.Param.Cutoff, 1e-6)
+        model.setParam(GRB.Param.OptimalityTol, 1e-3)
+        model.setParam(GRB.Param.FeasibilityTol, 1e-3)
+        model.setParam(GRB.Param.NumericFocus, 2)
+        # model.setParam(GRB.Param.MarkowitzTol, 0.9)
+        model.setParam(GRB.Param.Method, 3)
+        print(f'[INFO] Setting timeout to 1000s')
+        print(f'[INFO] Setting cutoff to 1e-6')
+        print(f'[INFO] Setting optimality tolerance to 1e-3')
+        print(f'[INFO] Setting feasibility tolerance to 1e-3')
+        print(f'[INFO] Setting numeric focus to 2')
+        # print(f'[INFO] Setting Markowitz tolerance to 0.1')
+        print(f'[INFO] Setting method to 3 (Concurrent)')
+        model.update()
+
+        return grb_var_counter, grb_vars, model, kact_constrs
+
+
+def refine_gpupoly_results(nn, network, layers_num, relu_layer_idxes, label, adv_labels):
+    analyzer = GPUPolyAnalyzer(nn, network, relu_layer_idxes)
+
+    nlb, nub, relu_layers_indxes_gpu = analyzer.get_all_neuron_bounds()
+
+    layer_idx_second_fc = analyzer.get_second_fc_layer_idx()
+
+    index = 0
+    relu_groups = []
+    for l in relu_layer_idxes:
+        gpu_layer = l - 1
+        layer_idx = relu_layers_indxes_gpu[index]
+
+        if config.refine_neurons:
+            nlb, nub = analyzer.refine_neuron_bounds(relu_groups, layer_idx, layer_idx_second_fc)
+
+        lbi, ubi = nlb[layer_idx - 1], nub[layer_idx - 1]
+        num_neurons = len(lbi)
+
+        if config.approx_k == 'triangle':
+            relu_groups.append([])
+            continue
+        print(f'[INFO] Method={config.approx_k} ns={config.sparse_n} k={config.k} s={config.s} '
+              f'cutoff={config.cutoff:.2f}')
+        kact_args = sparse_heuristic_with_cutoff(num_neurons, lbi, ubi, config.sparse_n, config.k, config.s,
+                                                 config.cutoff)
+
+        if len(kact_args) == 0:
+            relu_groups.append([])
+            continue
+
+        relu_groups.append(analyzer.encode_kact_constraints(kact_args, gpu_layer, lbi, ubi))
+        index += 1
+
+    print(f'[INFO] Labels {adv_labels} to be verified', end=' ')
+
+    start = time.time()
+    counter, var_list, model, kact_constrs = analyzer.create_gurobi_model(relu_groups)
+
+    infeasible_model = None
     flag = True
     x = None
-    for label in labels_to_be_verified:
-        obj = LinExpr()
-        #obj += 1*var_list[785]
-        obj += 1*var_list[counter + true_label]
-        obj += -1*var_list[counter + label]
-        model.setObjective(obj,GRB.MINIMIZE)
-        # model.optimize()
-        if complete:
-            milp_timeout = config.timeout_final_milp if config.timeout_complete is None else (config.timeout_complete + start_milp - time.time())
-            model.setParam(GRB.Param.TimeLimit, milp_timeout)
-            model.optimize(milp_callback)
-        else:
-            model.optimize(lp_callback)
-        # model.computeIIS()
-        #model.write("model_refinegpupo.ilp")
-        try:
-            print(
-                f"Model status: {model.Status}, Obj val/bound against label {label}: {model.objval:.4f}/{model.objbound:.4f}, Final solve time: {model.Runtime:.3f}")
-        except:
-            print(
-                f"Model status: {model.Status}, Objval retrival failed, Final solve time: {model.Runtime:.3f}")
 
-        if model.Status == 6 or (model.Status in [2,11] and model.objval > 0):
-            # Cutoff active, or optimal with positive objective => sound against adv_label
+    for adv_label in adv_labels:
+        print(f'{label}vs{adv_label}', end='')
+
+        model.setObjective(LinExpr(var_list[counter + label] - var_list[counter + adv_label]), GRB.MINIMIZE)
+        model.optimize(lp_callback)
+        print(f"({model.Runtime:.2f}s)", end=" ")
+
+        logger = Logger.current_logger
+        if logger is not None:
+            try:
+                objval = model.objval
+            except:
+                objval = 0.0
+            logger.record_lp(model.Runtime, len(model.getConstrs()), model.Status, objval)
+
+        # if model.Status in [3, 4]:
+        #     time_start = time.time()
+        #     model.computeIIS()
+        #     print(f'Compute IIS ({time.time() - time_start:.2f}s)')
+        #     # Remove all constraints that are in the IIS
+        #     for constr in model.getConstrs():
+        #         if constr.IISConstr and (
+        #                 constr.ConstrName.startswith('relu_triangle') or constr.ConstrName.startswith('kact')):
+        #             model.remove(constr)
+        #     model.update()
+        #     print(f"[INFO] Remain {len(model.getConstrs())} constraints from the model")
+        #     # model.update()
+        #
+        #     print(f'LP model', end=' ')
+        #     model.optimize(lp_callback)
+
+        print(f"{model.Status}", end=' ')
+        if model.Status == 6:
             pass
-        elif partial_milp != 0 and not complete:
-            if model.Status == 2:
-                x_adv = np.array(model.x[0:len(nn.specLB)])
-                is_not_shown_unsafe = network.test(x_adv, x_adv, int(true_label))
-            else:
-                is_not_shown_unsafe = True
-            if not is_not_shown_unsafe:
+        elif model.Status == 2:
+            print(f"(objval={model.objval:.4f})", end=' ')
+            if model.objval < 0 and model.objval != math.inf:
                 flag = False
-                print(f"Counterexample found, partial MILP skipped.")
-            else:
-                obj = LinExpr()
-                obj += 1 * var_list_partial_milp[counter_partial_milp + true_label]
-                obj += -1 * var_list_partial_milp[counter_partial_milp + label]
-                model_partial_milp.setObjective(obj, GRB.MINIMIZE)
-                model_partial_milp.optimize(milp_callback)
-                if model_partial_milp.Status == 3:
-                    model_partial_milp.setParam(GRB.Param.FeasibilityTol, 1e-4)
-                    print(f"Infeasible model encountered. Increased tolerance")
-                    model_partial_milp.reset()
-                    model_partial_milp.optimize(milp_callback)
-                try:
-                    print(
-                        f"Partial MILP model status: {model_partial_milp.Status}, Obj val/bound against label {label}: {model_partial_milp.ObjVal:.4f}/{model_partial_milp.ObjBound:.4f}, Final solve time: {model_partial_milp.Runtime:.3f}")
-                except:
-                    print(
-                        f"Partial MILP model status: {model_partial_milp.Status}, Obj bound retrival failed, Final solve time: {model_partial_milp.Runtime:.3f}")
-
-                if model_partial_milp.Status in [2, 9, 6, 11] and model_partial_milp.ObjBound > 0:
-                    pass
-                elif model_partial_milp.Status not in [2, 9, 6, 11]:
-                    print("Partial milp model was not successful status is", model_partial_milp.Status)
-                    model_partial_milp.write("final.mps")
-                    flag = False
-                else:
-                    flag = False
-        elif model.Status not in [2, 11, 6]:
-            print("Model was not successful status is",
-                  model.Status)
-            model.write("final.mps")
-            flag = False
+                x = model.x[0:len(nn.specLB)]
         else:
             flag = False
-        if not flag and model.Status == 2 and model.objval < 0:
-            if model.objval != math.inf:
-                x = model.x[0:len(nn.specLB)]
+            if model.Status in [3, 4]:
+                infeasible_model = model
 
         if not flag:
-                break
-    return flag, x
+            break
+    print()
+    return flag, x, infeasible_model

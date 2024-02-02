@@ -17,16 +17,17 @@ while : ; do
     shift
 done
 
+cd ..
 
-#wget ftp://ftp.gnu.org/pub/gnu/m4/m4-1.4.18.tar.gz
-#tar -xvzf m4-1.4.18.tar.gz
-#cd m4-1.4.18
-#./configure
-#make
-#make install
-#cp src/m4 /usr/bin
-#cd ..
-#rm m4-1.4.18.tar.gz
+wget ftp://ftp.gnu.org/pub/gnu/m4/m4-1.4.18.tar.gz
+tar -xvzf m4-1.4.18.tar.gz
+cd m4-1.4.18
+./configure
+make
+make install
+cp src/m4 /usr/bin
+cd ..
+rm m4-1.4.18.tar.gz
 
 
 
@@ -92,15 +93,15 @@ make
 make install
 cd ..
 
-git clone https://github.com/eth-sri/deepg.git
-cd deepg/code
-mkdir build
-make shared_object
-cp ./build/libgeometric.so /usr/lib
-cd ../..
+#git clone https://github.com/eth-sri/deepg.git
+#cd deepg/code
+#mkdir build
+#make shared_object
+#cp ./build/libgeometric.so /usr/lib
+#cd ../..
 
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib:/usr/lib
 
-wget https://files.sri.inf.ethz.ch/eran/nets/tensorflow/mnist/mnist_relu_3_50.tf
+#wget https://files.sri.inf.ethz.ch/eran/nets/tensorflow/mnist/mnist_relu_3_50.tf
 
 ldconfig
