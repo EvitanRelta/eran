@@ -27,7 +27,7 @@ from torch import Tensor, nn
 # from ml-part-time.src.compare_against_gurobi import compare_against_gurobi
 from ml_bound_solver.src.preprocessing.solver_inputs import SolverInputs
 from ml_bound_solver.src.solve import solve
-from ml_bound_solver.src.utils import load_onnx_model, wrap_solver_inputs
+from ml_bound_solver.src.utils import load_onnx_model
 # from ml-part-time.src.utils import seed_everything
 
 import gc
@@ -743,7 +743,7 @@ class Analyzer:
                 for i in range(1, len(IOIL_lbs)):
                     len_unstable_vars.append(len([j for j in range(len(IOIL_lbs[i])) if IOIL_lbs[i][j] < 0 and IOIL_ubs[i][j] > 0]))
                 # print("len_unstable_vars for all intermediate layers before solving", len_unstable_vars)
-                # solver_inputs = wrap_solver_inputs(IOIL_lbs, IOIL_ubs, P_allayer, Phat_allayer, smallp_allayer, Hmatrix, dvector, gt_label, torch_model)
+                # solver_inputs = SolverInputs(torch_model, gt_label, IOIL_lbs, IOIL_ubs, Hmatrix, dvector, P_allayer, Phat_allayer, smallp_allayer)
                 # is_falsified, IOIL_lbs, IOIL_ubs, solver = solve(
                 #                                         solver_inputs,
                 #                                         device=torch.device("cuda"),
