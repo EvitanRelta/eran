@@ -110,7 +110,7 @@ def refine_gpupoly_results(nn, network, num_gpu_layers, relu_layers, true_label,
             bounds = np.concatenate([bounds, bounds_temp], axis=0)
         upper_bound = bounds[:,1]
         i=0
-        input_hrep_array = []
+        input_hrep_array, lb_array, ub_array = [], [], []
         for varsid in kact_args:
             input_hrep = []
             for coeffs in itertools.product([-1, 0, 1], repeat=len(varsid)):
@@ -119,10 +119,12 @@ def refine_gpupoly_results(nn, network, num_gpu_layers, relu_layers, true_label,
                 input_hrep.append([upper_bound[i]] + [-c for c in coeffs])
                 i = i + 1
             input_hrep_array.append(input_hrep)
+            lb_array.append([lbi[varid] for varid in varsid])
+            ub_array.append([ubi[varid] for varid in varsid])
         KAct.type = "ReLU"
         with multiprocessing.Pool(config.numproc) as pool:
             # kact_results = pool.map(make_kactivation_obj, input_hrep_array)
-            kact_results = list(pool.starmap(make_kactivation_obj, zip(input_hrep_array, len(input_hrep_array) * [approx])))
+            kact_results = list(pool.starmap(make_kactivation_obj, zip(input_hrep_array, lb_array, ub_array, len(input_hrep_array) * [approx])))
 
         gid = 0
         for inst in kact_results:

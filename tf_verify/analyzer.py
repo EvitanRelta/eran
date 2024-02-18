@@ -945,7 +945,7 @@ class Analyzer:
                         i = i + 1
                 upper_bound = get_upper_bound_for_linexpr0(man,element,linexpr0, total_size, layerno)
                 i=0
-                input_hrep_array = []
+                input_hrep_array, lb_array, ub_array = [], [], []
                 for varsid in kact_args:
                     input_hrep = []
                     for coeffs in itertools.product([-1, 0, 1], repeat=len(varsid)):
@@ -954,9 +954,11 @@ class Analyzer:
                         input_hrep.append([upper_bound[i]] + [-c for c in coeffs])
                         i = i + 1
                     input_hrep_array.append(input_hrep)
+                    lb_array.append([lbi[varid] for varid in varsid])
+                    ub_array.append([ubi[varid] for varid in varsid])
                 # call function and obtain krelu constraints
                 with multiprocessing.Pool(config.numproc) as pool:
-                    kact_results = pool.starmap(make_kactivation_obj, zip(input_hrep_array, len(input_hrep_array) * [approx]))
+                    kact_results = pool.starmap(make_kactivation_obj, zip(input_hrep_array, lb_array, ub_array, len(input_hrep_array) * [approx]))
                 relu_groups.append(kact_results)
                 gid = 0
                 cons_count = 0
