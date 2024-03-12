@@ -587,21 +587,21 @@ class Analyzer:
         print("final_adv_labels", final_adv_labels)
         P_allayer, Phat_allayer, smallp_allayer, relu_groups = self.generate_krelu_cons(self.man, element, self.nn, 'refinepoly', full_vars=True)
         Hmatrix, dvector = self.obtain_output_cons_cddlib(final_adv_labels[:1], 1, ground_truth_label, [] ,self.man, element, len(self.nn.layertypes)-1)
-        dump_solver_inputs(IOIL_lbs, IOIL_ubs, P_allayer, Phat_allayer, smallp_allayer, Hmatrix, dvector)
+        # dump_solver_inputs(IOIL_lbs, IOIL_ubs, P_allayer, Phat_allayer, smallp_allayer, Hmatrix, dvector)
         # solve gurobi bounds
         start_list, var_list, model = build_gurobi_model(self.nn, self.nn.specLB, self.nn.specUB, nlb, nub, relu_groups, self.nn.numlayer, Hmatrix, dvector, output_size)
         self.solve_neuron_bounds_gurobi(model, var_list, start_list, element, True, bounds_save_path)
 
         ### ori_lbs, ori_ubs include the bounds of input neurons and ReLU UNSTABLE inputs
-        ori_lbs, ori_ubs = [IOIL_lbs[0]], [IOIL_ubs[0]]
-        for i in range(1, len(IOIL_lbs)):
-            row_lb, row_ub = IOIL_lbs[i], IOIL_ubs[i]
-            lb = [row_lb[j] for j in range(len(row_lb)) if row_lb[j] < 0 and row_ub[j] > 0]
-            ub = [row_ub[j] for j in range(len(row_lb)) if row_lb[j] < 0 and row_ub[j] > 0]   
-            ori_lbs.append(np.array(lb))
-            ori_ubs.append(np.array(ub))
-        dump_tensors_to_file(ori_lbs, 'ori_lbs')
-        dump_tensors_to_file(ori_ubs, 'ori_ubs')
+        # ori_lbs, ori_ubs = [IOIL_lbs[0]], [IOIL_ubs[0]]
+        # for i in range(1, len(IOIL_lbs)):
+        #     row_lb, row_ub = IOIL_lbs[i], IOIL_ubs[i]
+        #     lb = [row_lb[j] for j in range(len(row_lb)) if row_lb[j] < 0 and row_ub[j] > 0]
+        #     ub = [row_ub[j] for j in range(len(row_lb)) if row_lb[j] < 0 and row_ub[j] > 0]   
+        #     ori_lbs.append(np.array(lb))
+        #     ori_ubs.append(np.array(ub))
+        # dump_tensors_to_file(ori_lbs, 'ori_lbs')
+        # dump_tensors_to_file(ori_ubs, 'ori_ubs')
         
         
         '''
