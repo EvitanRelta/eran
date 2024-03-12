@@ -15,6 +15,7 @@
 """
 
 
+import pickle
 from elina_abstract0 import *
 from elina_manager import *
 from deeppoly_nodes import *
@@ -36,24 +37,6 @@ import cdd
 import numpy as np
 import os.path
 
-def dump_tensors_to_file(numpy_arrays: List[np.ndarray], varname: str = 'x', filename: str = 'dump.py'):
-    # Convert list of numpy arrays to list of PyTorch tensors
-    tensors = [torch.from_numpy(array) for array in numpy_arrays]
-    
-    # Write the list of tensors to a .py file
-    if(not os.path.exists(filename)):
-        with open(filename, 'w') as f:
-            f.write("import torch\n")
-
-    with open(filename, 'a+') as f:
-        f.write(varname +" = [\n")
-        
-        for tensor in tensors:
-            # Constructing a string representation of the tensor
-            tensor_str = repr(tensor.tolist())
-            f.write(f"    torch.tensor({tensor_str}),\n")
-        
-        f.write("]\n")
 
 def dump_solver_inputs(
     lbounds: List[np.ndarray],
@@ -529,7 +512,7 @@ class Analyzer:
         print(ubi)
         return lbi, ubi
 
-    def analyze_poly(self,terminate_on_failure=True, ground_truth_label=-1, IOIL_lbs=None, IOIL_ubs=None, multi_prune=3, onnx_path = None):
+    def analyze_poly(self,terminate_on_failure=True, ground_truth_label=-1, IOIL_lbs=None, IOIL_ubs=None, multi_prune=3, onnx_path = None, bounds_save_path: str = "dump.pkl"):
         """
         analyses the network with the given input
         
@@ -607,7 +590,7 @@ class Analyzer:
         dump_solver_inputs(IOIL_lbs, IOIL_ubs, P_allayer, Phat_allayer, smallp_allayer, Hmatrix, dvector)
         # solve gurobi bounds
         start_list, var_list, model = build_gurobi_model(self.nn, self.nn.specLB, self.nn.specUB, nlb, nub, relu_groups, self.nn.numlayer, Hmatrix, dvector, output_size)
-        self.solve_neuron_bounds_gurobi(model, var_list, start_list, element, True)
+        self.solve_neuron_bounds_gurobi(model, var_list, start_list, element, True, bounds_save_path)
 
         ### ori_lbs, ori_ubs include the bounds of input neurons and ReLU UNSTABLE inputs
         ori_lbs, ori_ubs = [IOIL_lbs[0]], [IOIL_ubs[0]]
@@ -643,7 +626,7 @@ class Analyzer:
         elina_abstract0_free(self.man, element)
         return dominant_class, nlb, nub, label_failed, x
     
-    def solve_neuron_bounds_gurobi(self, model, var_list, start_list, element, full_vars = False):
+    def solve_neuron_bounds_gurobi(self, model, var_list, start_list, element, full_vars = False, bounds_save_path: str = "dump.pkl"):
         ### resolve input bounds
         length = start_list[1]
         print("input dimension is", length)
@@ -694,8 +677,14 @@ class Analyzer:
                 gurobi_ubs.append(ubs)
             else:
                 continue
-        dump_tensors_to_file(gurobi_lbs, 'gurobi_lbs')
-        dump_tensors_to_file(gurobi_ubs, 'gurobi_ubs')
+
+        # Save bounds to file.
+        with open(bounds_save_path, 'wb') as file:
+            pickle.dump({
+                'gurobi_lbs': gurobi_lbs,
+                'gurobi_ubs': gurobi_ubs,
+            }, file)
+
         return gurobi_lbs, gurobi_ubs
         # print("solving status is", model.Status)
         # print("solved optimized value is", model.objbound)

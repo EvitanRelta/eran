@@ -91,3 +91,4 @@ class config:
     gamma = float('inf')
     quant_step = None
 
+    bounds_save_path: str = "dump.pkl" # Save file path for Gurobi-solved bounds.
