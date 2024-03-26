@@ -326,6 +326,7 @@ parser.add_argument("--approx_k", type=str2bool, default=config.approx_k, help="
 parser.add_argument('--logdir', type=str, default=None, help='Location to save logs to. If not specified, logs are not saved and emitted to stdout')
 parser.add_argument('--logname', type=str, default=None, help='Directory of log files in `logdir`, if not specified timestamp is used')
 parser.add_argument('--bounds_save_path', type=str, default=config.bounds_save_path, help='Save file path for Gurobi-solved bounds')
+parser.add_argument('--use_wralu', action='store_true', help='Whether to use WraLU to solve')
 
 
 args = parser.parse_args()
@@ -660,7 +661,14 @@ for i, test in enumerate(tests):
                                                                                     terminate_on_failure=not config.complete,
                                                                                     partial_milp=config.partial_milp,
                                                                                     max_milp_neurons=config.max_milp_neurons,
-                                                                                    approx_k=config.approx_k, IOIL_lbs=IOIL_lbs, IOIL_ubs=IOIL_ubs, ARENA=config.ARENA, multi_prune=config.multi_prune, onnx_path=config.netname, bounds_save_path=os.path.abspath(config.bounds_save_path))
+                                                                                    approx_k=config.approx_k,
+                                                                                    IOIL_lbs=IOIL_lbs,
+                                                                                    IOIL_ubs=IOIL_ubs,
+                                                                                    ARENA=config.ARENA,
+                                                                                    multi_prune=config.multi_prune,
+                                                                                    onnx_path=config.netname,
+                                                                                    bounds_save_path=os.path.abspath(config.bounds_save_path),
+                                                                                    use_wralu=config.use_wralu)
                 print("nlb ", nlb[-1], " nub ", nub[-1], "adv labels ", failed_labels)
             if (perturbed_label==label):
                 # verification succeeds

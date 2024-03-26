@@ -92,3 +92,4 @@ class config:
     quant_step = None
 
     bounds_save_path: str = "dump.pkl" # Save file path for Gurobi-solved bounds.
+    use_wralu: bool = False

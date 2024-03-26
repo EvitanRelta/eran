@@ -115,7 +115,9 @@ class ERAN:
                     output_constraints=None, lexpr_weights= None, lexpr_cst=None, lexpr_dim=None, uexpr_weights=None,
                     uexpr_cst=None, uexpr_dim=None, expr_size=0, testing = False,label=-1, prop = -1,
                     spatial_constraints=None, K=3, s=-2, timeout_final_lp=100, timeout_final_milp=100, use_milp=False,
-                    complete=False, terminate_on_failure=True, partial_milp=False, max_milp_neurons=30, approx_k=True, IOIL_lbs = None, IOIL_ubs = None, ARENA=False, multi_prune=3, onnx_path = None, bounds_save_path: str = "dump.pkl"):
+                    complete=False, terminate_on_failure=True, partial_milp=False, max_milp_neurons=30, approx_k=True,
+                    IOIL_lbs = None, IOIL_ubs = None, ARENA=False, multi_prune=3, onnx_path = None,
+                    bounds_save_path: str = "dump.pkl", use_wralu=False):
         """
         This function runs the analysis with the provided model and session from the constructor, the box specified by specLB and specUB is used as input. Currently we have three domains, 'deepzono',      		'refinezono' and 'deeppoly'.
         
@@ -148,7 +150,7 @@ class ERAN:
                                 use_milp=use_milp, complete=complete,
                                 partial_milp=partial_milp, max_milp_neurons=max_milp_neurons,
                                 approx_k=approx_k, ARENA=ARENA)
-        dominant_class, nlb, nub, failed_labels, x = analyzer.analyze_poly(terminate_on_failure=terminate_on_failure, ground_truth_label=label, IOIL_lbs=IOIL_lbs, IOIL_ubs=IOIL_ubs, multi_prune=multi_prune, onnx_path=onnx_path, bounds_save_path=bounds_save_path)
+        dominant_class, nlb, nub, failed_labels, x = analyzer.analyze_poly(terminate_on_failure=terminate_on_failure, ground_truth_label=label, IOIL_lbs=IOIL_lbs, IOIL_ubs=IOIL_ubs, multi_prune=multi_prune, onnx_path=onnx_path, bounds_save_path=bounds_save_path, use_wralu=use_wralu)
         if terminate_on_failure:
             failed_labels = None # rather return nothing than an incomplete list
             

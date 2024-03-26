@@ -512,7 +512,17 @@ class Analyzer:
         print(ubi)
         return lbi, ubi
 
-    def analyze_poly(self,terminate_on_failure=True, ground_truth_label=-1, IOIL_lbs=None, IOIL_ubs=None, multi_prune=3, onnx_path = None, bounds_save_path: str = "dump.pkl"):
+    def analyze_poly(
+        self,
+        terminate_on_failure=True,
+        ground_truth_label=-1,
+        IOIL_lbs=None,
+        IOIL_ubs=None,
+        multi_prune=3,
+        onnx_path = None,
+        bounds_save_path: str = "dump.pkl",
+        use_wralu: bool = False
+    ):
         """
         analyses the network with the given input
         
@@ -585,7 +595,7 @@ class Analyzer:
         
         # dump constraints and gurobi solved bounds to files
         print("final_adv_labels", final_adv_labels)
-        P_allayer, Phat_allayer, smallp_allayer, relu_groups = self.generate_krelu_cons(self.man, element, self.nn, 'refinepoly', full_vars=True)
+        P_allayer, Phat_allayer, smallp_allayer, relu_groups = self.generate_krelu_cons(self.man, element, self.nn, 'refinepoly', full_vars=True, use_wralu=use_wralu)
         Hmatrix, dvector = self.obtain_output_cons_cddlib(final_adv_labels[:1], 1, ground_truth_label, [] ,self.man, element, len(self.nn.layertypes)-1)
         # dump_solver_inputs(IOIL_lbs, IOIL_ubs, P_allayer, Phat_allayer, smallp_allayer, Hmatrix, dvector)
         # solve gurobi bounds
@@ -707,7 +717,7 @@ class Analyzer:
             elina_interval_array_free(bounds,length)
         return nlb, nub, new_lbs, new_ubs
 
-    def eliminate_adv_labels(self, multi_label_list, num_multi, gt_label, pruned_labels, element, nlb_ori, nub_ori, IOIL_lbs, IOIL_ubs, P_allayer_ori, Phat_allayer_ori, smallp_allayer_ori, relu_groups_ori, output_num = 10, onnx_path = None):
+    def eliminate_adv_labels(self, multi_label_list, num_multi, gt_label, pruned_labels, element, nlb_ori, nub_ori, IOIL_lbs, IOIL_ubs, P_allayer_ori, Phat_allayer_ori, smallp_allayer_ori, relu_groups_ori, output_num = 10, onnx_path = None, use_wralu=False):
         # revert back to oringal deeppoly abstract domain
         clear_neurons_status(self.man, element)
         run_deeppoly(self.man, element)
@@ -748,7 +758,7 @@ class Analyzer:
                 flat_ubs = np.asarray([item for sublist in IOIL_ubs for item in sublist], dtype=np.float64)
                 num_each_layer = [len(item) for item in IOIL_lbs]
                 update_bounds_from_LPsolve(self.man, element, len(IOIL_lbs), num_each_layer, flat_lbs, flat_ubs)
-                P_allayer, Phat_allayer, smallp_allayer, relu_groups = self.generate_krelu_cons(self.man, element, self.nn, 'refinepoly')
+                P_allayer, Phat_allayer, smallp_allayer, relu_groups = self.generate_krelu_cons(self.man, element, self.nn, 'refinepoly', use_wralu=use_wralu)
                 # rerun deeppoly with new bounds will reduce other neurons as well, need to reformulate IOIL_lbs/ubs with current results
                 nlb, nub, IOIL_lbs, IOIL_ubs = self.obtain_curDP_bounds_and_update_IOIL(self.man, element, IOIL_lbs[0], IOIL_ubs[0])
                 _, _, model = build_gurobi_model(self.nn, IOIL_lbs[0], IOIL_ubs[0], nlb, nub, relu_groups, self.nn.numlayer, Hmatrix, dvector, output_num)
@@ -888,7 +898,7 @@ class Analyzer:
         # print("number of args", len(kact_args))
         return kact_args, unstable_vars
 
-    def generate_krelu_cons(self, man, element, nn, domain, K=3, s=-2, approx=True, act ='ReLU', full_vars = False):
+    def generate_krelu_cons(self, man, element, nn, domain, K=3, s=-2, approx=True, act ='ReLU', full_vars = False, use_wralu = False):
         # obtain krelu constraints from PRIMA feature
         P_allayer_list = []
         Phat_allayer_list = []
@@ -947,7 +957,8 @@ class Analyzer:
                     ub_array.append([ubi[varid] for varid in varsid])
                 # call function and obtain krelu constraints
                 with multiprocessing.Pool(config.numproc) as pool:
-                    kact_results = pool.starmap(make_kactivation_obj, zip(input_hrep_array, lb_array, ub_array, len(input_hrep_array) * [approx]))
+                    num_inputs = len(input_hrep_array)
+                    kact_results = pool.starmap(make_kactivation_obj, zip(input_hrep_array, lb_array, ub_array, [approx] * num_inputs, [use_wralu] * num_inputs))
                 relu_groups.append(kact_results)
                 gid = 0
                 cons_count = 0
