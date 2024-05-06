@@ -23,7 +23,7 @@ from deepzono_nodes import *
 from krelu import *
 from functools import reduce
 from ai_milp import milp_callback
-from typing import List
+from typing import List, Literal, Union
 from torch import Tensor, nn
 # from ml-part-time.src.compare_against_gurobi import compare_against_gurobi
 from ml_bound_solver.src.preprocessing.solver_inputs import SolverInputs
@@ -36,6 +36,7 @@ import torch
 import cdd
 import numpy as np
 import os.path
+import logging
 
 
 def dump_solver_inputs(
@@ -216,7 +217,8 @@ class layers:
 class Analyzer:
     def __init__(self, ir_list, nn, domain, timeout_lp, timeout_milp, output_constraints, use_default_heuristic, label,
                  prop, testing = False, K=3, s=-2, timeout_final_lp=100, timeout_final_milp=100, use_milp=False,
-                 complete=False, partial_milp=False, max_milp_neurons=30, approx_k=True, ARENA=False):
+                 complete=False, partial_milp=False, max_milp_neurons=30, approx_k=True, ARENA=False,
+                 use_wralu: Union[None, Literal["sci", "sciplus", "sciall"]] = None):
         """
         Arguments
         ---------
@@ -256,6 +258,7 @@ class Analyzer:
         self.partial_milp=partial_milp
         self.max_milp_neurons=max_milp_neurons
         self.approx_k = approx_k
+        self.use_wralu = use_wralu
 
     def __del__(self):
         elina_manager_free(self.man)
@@ -276,7 +279,7 @@ class Analyzer:
                                                                   self.timeout_lp, self.timeout_milp,
                                                                   self.use_default_heuristic, self.testing,
                                                                   K=self.K, s=self.s, use_milp=self.use_milp,
-                                                                  approx=self.approx_k)
+                                                                  approx=self.approx_k, use_wralu=self.use_wralu)
             else:
                 element_test_bounds = self.ir_list[i].transformer(self.nn, self.man, element, nlb, nub,
                                                                   self.relu_groups, 'refine' in self.domain,
@@ -521,7 +524,7 @@ class Analyzer:
         multi_prune=3,
         onnx_path = None,
         bounds_save_path: str = "dump.pkl",
-        use_wralu: bool = False
+        use_wralu: Union[None, Literal["sci", "sciplus", "sciall"]] = None
     ):
         """
         analyses the network with the given input
@@ -595,12 +598,18 @@ class Analyzer:
         
         # dump constraints and gurobi solved bounds to files
         print("final_adv_labels", final_adv_labels)
+        start_time = time.time()
         P_allayer, Phat_allayer, smallp_allayer, relu_groups = self.generate_krelu_cons(self.man, element, self.nn, 'refinepoly', full_vars=True, use_wralu=use_wralu)
+        execution_time = time.time() - start_time
+        logging.critical(f"Generate constraints: {execution_time:.5f}s")
         Hmatrix, dvector = self.obtain_output_cons_cddlib(final_adv_labels[:1], 1, ground_truth_label, [] ,self.man, element, len(self.nn.layertypes)-1)
         # dump_solver_inputs(IOIL_lbs, IOIL_ubs, P_allayer, Phat_allayer, smallp_allayer, Hmatrix, dvector)
         # solve gurobi bounds
         start_list, var_list, model = build_gurobi_model(self.nn, self.nn.specLB, self.nn.specUB, nlb, nub, relu_groups, self.nn.numlayer, Hmatrix, dvector, output_size)
+        start_time = time.time()
         self.solve_neuron_bounds_gurobi(model, var_list, start_list, element, True, bounds_save_path)
+        execution_time = time.time() - start_time
+        logging.critical(f"Gurobi: {execution_time:.5f} seconds")
 
         ### ori_lbs, ori_ubs include the bounds of input neurons and ReLU UNSTABLE inputs
         # ori_lbs, ori_ubs = [IOIL_lbs[0]], [IOIL_ubs[0]]
@@ -717,7 +726,8 @@ class Analyzer:
             elina_interval_array_free(bounds,length)
         return nlb, nub, new_lbs, new_ubs
 
-    def eliminate_adv_labels(self, multi_label_list, num_multi, gt_label, pruned_labels, element, nlb_ori, nub_ori, IOIL_lbs, IOIL_ubs, P_allayer_ori, Phat_allayer_ori, smallp_allayer_ori, relu_groups_ori, output_num = 10, onnx_path = None, use_wralu=False):
+    def eliminate_adv_labels(self, multi_label_list, num_multi, gt_label, pruned_labels, element, nlb_ori, nub_ori, IOIL_lbs, IOIL_ubs, P_allayer_ori, Phat_allayer_ori, smallp_allayer_ori, relu_groups_ori, output_num = 10, onnx_path = None,
+                             use_wralu: Union[None, Literal["sci", "sciplus", "sciall"]] = None):
         # revert back to oringal deeppoly abstract domain
         clear_neurons_status(self.man, element)
         run_deeppoly(self.man, element)
@@ -898,7 +908,8 @@ class Analyzer:
         # print("number of args", len(kact_args))
         return kact_args, unstable_vars
 
-    def generate_krelu_cons(self, man, element, nn, domain, K=3, s=-2, approx=True, act ='ReLU', full_vars = False, use_wralu = False):
+    def generate_krelu_cons(self, man, element, nn, domain, K=3, s=-2, approx=True, act ='ReLU', full_vars = False,
+                            use_wralu: Union[None, Literal["sci", "sciplus", "sciall"]] = None):
         # obtain krelu constraints from PRIMA feature
         P_allayer_list = []
         Phat_allayer_list = []
