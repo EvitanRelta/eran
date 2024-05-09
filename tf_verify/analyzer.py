@@ -36,6 +36,7 @@ import torch
 import cdd
 import numpy as np
 import os.path
+import logging
 
 
 def dump_solver_inputs(
@@ -597,12 +598,18 @@ class Analyzer:
         
         # dump constraints and gurobi solved bounds to files
         print("final_adv_labels", final_adv_labels)
+        start_time = time.time()
         P_allayer, Phat_allayer, smallp_allayer, relu_groups = self.generate_krelu_cons(self.man, element, self.nn, 'refinepoly', full_vars=True, K=self.K, s=self.s, use_wralu=use_wralu)
+        execution_time = time.time() - start_time
+        logging.critical(f"Generate constraints: {execution_time:.5f}s")
         Hmatrix, dvector = self.obtain_output_cons_cddlib(final_adv_labels[:1], 1, ground_truth_label, [] ,self.man, element, len(self.nn.layertypes)-1)
         # dump_solver_inputs(IOIL_lbs, IOIL_ubs, P_allayer, Phat_allayer, smallp_allayer, Hmatrix, dvector)
         # solve gurobi bounds
         start_list, var_list, model = build_gurobi_model(self.nn, self.nn.specLB, self.nn.specUB, nlb, nub, relu_groups, self.nn.numlayer, Hmatrix, dvector, output_size)
+        start_time = time.time()
         self.solve_neuron_bounds_gurobi(model, var_list, start_list, element, True, bounds_save_path)
+        execution_time = time.time() - start_time
+        logging.critical(f"Gurobi: {execution_time:.5f} seconds")
 
         ### ori_lbs, ori_ubs include the bounds of input neurons and ReLU UNSTABLE inputs
         # ori_lbs, ori_ubs = [IOIL_lbs[0]], [IOIL_ubs[0]]

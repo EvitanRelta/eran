@@ -346,6 +346,9 @@ assert config.netname, 'a network has to be provided for analysis.'
 config.bounds_save_path = os.path.abspath(config.bounds_save_path)
 os.makedirs(os.path.dirname(config.bounds_save_path), exist_ok=True)
 
+import logging
+logging.basicConfig(filename=os.path.join(os.path.dirname(config.bounds_save_path), "log"), level=logging.CRITICAL, format=f'use_wralu={config.use_wralu}, eps={config.epsilon}, sparse_n={config.sparse_n}, k={config.k}, s={config.s} - %(message)s')
+
 netname = config.netname
 assert os.path.isfile(netname), f"Model file not found. Please check \"{netname}\" is correct."
 filename, file_extension = os.path.splitext(netname)
