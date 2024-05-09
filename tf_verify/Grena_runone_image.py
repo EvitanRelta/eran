@@ -343,6 +343,8 @@ if config.specnumber and not config.input_box and not config.output_constraints:
 
 assert config.netname, 'a network has to be provided for analysis.'
 
+config.bounds_save_path = os.path.abspath(config.bounds_save_path)
+os.makedirs(os.path.dirname(config.bounds_save_path), exist_ok=True)
 
 netname = config.netname
 assert os.path.isfile(netname), f"Model file not found. Please check \"{netname}\" is correct."
@@ -676,7 +678,7 @@ for i, test in enumerate(tests):
                                                                                     ARENA=config.ARENA,
                                                                                     multi_prune=config.multi_prune,
                                                                                     onnx_path=config.netname,
-                                                                                    bounds_save_path=os.path.abspath(config.bounds_save_path),
+                                                                                    bounds_save_path=config.bounds_save_path,
                                                                                     use_wralu=config.use_wralu)
                 print("nlb ", nlb[-1], " nub ", nub[-1], "adv labels ", failed_labels)
             if (perturbed_label==label):
