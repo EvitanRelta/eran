@@ -667,7 +667,7 @@ for i, test in enumerate(tests):
                                                                                     config.timeout_milp,
                                                                                     config.use_default_heuristic,
                                                                                     label=label, prop=prop,
-                                                                                    K=0, s=0,
+                                                                                    K=config.k, s=config.s,
                                                                                     timeout_final_lp=config.timeout_final_lp,
                                                                                     timeout_final_milp=config.timeout_final_milp,
                                                                                     use_milp=config.use_milp,
