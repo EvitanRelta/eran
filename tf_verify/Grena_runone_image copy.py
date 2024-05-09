@@ -270,6 +270,7 @@ def init_domain(d):
     else:
         return d
 
+# fmt:off
 parser = argparse.ArgumentParser(description='ERAN Example',  formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('--netname', type=isnetworkfile, default=config.netname, help='the network name, the extension can be only .pb, .pyt, .tf, .meta, and .onnx')
 parser.add_argument('--epsilon', type=float, default=config.epsilon, help='the epsilon for L_infinity perturbation')
@@ -327,6 +328,7 @@ parser.add_argument('--logdir', type=str, default=None, help='Location to save l
 parser.add_argument('--logname', type=str, default=None, help='Directory of log files in `logdir`, if not specified timestamp is used')
 parser.add_argument('--bounds_save_path', type=str, default=config.bounds_save_path, help='Save file path for Gurobi-solved bounds')
 parser.add_argument('--use_wralu', type=str, default=config.use_wralu, help='Type of WraLU solver to use: "sci", "sciplus" or "sciall". If not specified, default to using original `fkrelu` solver (ie. don\'t use WraLU).')
+# fmt:on
 
 
 args = parser.parse_args()
@@ -358,7 +360,7 @@ is_saved_tf_model = file_extension==".meta"
 is_pb_file = file_extension==".pb"
 is_tensorflow = file_extension== ".tf"
 is_onnx = file_extension == ".onnx"
-assert is_trained_with_pytorch or is_saved_tf_model or is_pb_file or is_tensorflow or is_onnx, "file extension not supported"
+assert is_trained_with_pytorch or is_saved_tf_model or is_pb_file or is_tensorflow or is_onnx, "file extension not supported"#fmt:skip
 
 epsilon = config.epsilon
 #assert (epsilon >= 0) and (epsilon <= 1), "epsilon can only be between 0 and 1"
@@ -372,9 +374,9 @@ if zonotope_bool:
 domain = config.domain
 
 if zonotope_bool:
-    assert domain in ['deepzono', 'refinezono'], "domain name can be either deepzono or refinezono"
+    assert domain in ['deepzono', 'refinezono'], "domain name can be either deepzono or refinezono"#fmt:skip
 elif not config.geometric:
-    assert domain in ['deepzono', 'refinezono', 'deeppoly', 'refinepoly', 'gpupoly', 'refinegpupoly'], "domain name can be either deepzono, refinezono, deeppoly, refinepoly, gpupoly, refinegpupoly"
+    assert domain in ['deepzono', 'refinezono', 'deeppoly', 'refinepoly', 'gpupoly', 'refinegpupoly'], "domain name can be either deepzono, refinezono, deeppoly, refinepoly, gpupoly, refinegpupoly"#fmt:skip
 
 dataset = config.dataset
 
