@@ -595,7 +595,7 @@ class Analyzer:
         
         # dump constraints and gurobi solved bounds to files
         print("final_adv_labels", final_adv_labels)
-        P_allayer, Phat_allayer, smallp_allayer, relu_groups = self.generate_krelu_cons(self.man, element, self.nn, 'refinepoly', full_vars=True, use_wralu=use_wralu)
+        P_allayer, Phat_allayer, smallp_allayer, relu_groups = self.generate_krelu_cons(self.man, element, self.nn, 'refinepoly', full_vars=True, K=self.K, s=self.s, use_wralu=use_wralu)
         Hmatrix, dvector = self.obtain_output_cons_cddlib(final_adv_labels[:1], 1, ground_truth_label, [] ,self.man, element, len(self.nn.layertypes)-1)
         # dump_solver_inputs(IOIL_lbs, IOIL_ubs, P_allayer, Phat_allayer, smallp_allayer, Hmatrix, dvector)
         # solve gurobi bounds

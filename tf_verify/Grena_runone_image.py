@@ -515,7 +515,16 @@ for i, test in enumerate(tests):
     if domain == 'gpupoly' or domain == 'refinegpupoly':
         is_correctly_classified = network.test(specLB, specUB, int(test[0]), True)
     else:
-        label,nn,nlb,nub,_,_ = eran.analyze_box(specLB, specUB, init_domain(domain), config.timeout_lp, config.timeout_milp, config.use_default_heuristic)
+        label,nn,nlb,nub,_,_ = eran.analyze_box(
+            specLB,
+            specUB,
+            init_domain(domain),
+            config.timeout_lp,
+            config.timeout_milp,
+            config.use_default_heuristic,
+            K=config.k,
+            s=config.s,
+        )
         print("concrete ", nlb[-1])
         if label == int(test[0]):
             is_correctly_classified = True
@@ -653,7 +662,7 @@ for i, test in enumerate(tests):
                                                                                     config.timeout_milp,
                                                                                     config.use_default_heuristic,
                                                                                     label=label, prop=prop,
-                                                                                    K=0, s=0,
+                                                                                    K=config.k, s=config.s,
                                                                                     timeout_final_lp=config.timeout_final_lp,
                                                                                     timeout_final_milp=config.timeout_final_milp,
                                                                                     use_milp=config.use_milp,
