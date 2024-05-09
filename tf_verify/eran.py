@@ -152,7 +152,7 @@ class ERAN:
                                 use_milp=use_milp, complete=complete,
                                 partial_milp=partial_milp, max_milp_neurons=max_milp_neurons,
                                 approx_k=approx_k, ARENA=ARENA, use_wralu=use_wralu)
-        dominant_class, nlb, nub, failed_labels, x = analyzer.analyze_poly(terminate_on_failure=terminate_on_failure, ground_truth_label=label, IOIL_lbs=IOIL_lbs, IOIL_ubs=IOIL_ubs, multi_prune=multi_prune, onnx_path=onnx_path, bounds_save_path=bounds_save_path, use_wralu=use_wralu)
+        dominant_class, nlb, nub, failed_labels, x = analyzer.analyze_poly(terminate_on_failure=terminate_on_failure, ground_truth_label=label, IOIL_lbs=IOIL_lbs, IOIL_ubs=IOIL_ubs, multi_prune=multi_prune, onnx_path=onnx_path, bounds_save_path=bounds_save_path)
         if terminate_on_failure:
             failed_labels = None # rather return nothing than an incomplete list
             
