@@ -21,37 +21,25 @@ cpu_affinity = os.sched_getaffinity(0)
 sys.path.insert(0, "../ELINA/python_interface/")
 sys.path.insert(0, "../deepg/code/")
 import argparse
-
-# import tensorflow as tf
 import csv
 import itertools
 import logging
 import re
 import time
-from copy import deepcopy
-from multiprocessing import Pool, Value
 from pprint import pprint
 
 import numpy as np
 import onnxruntime.backend as rt
-import spatial
-import torch
 from ai_milp import *
 from analyzer import *
 from config import config
 from constraint_utils import *
-
-# from tensorflow_translator import *
 from onnx_translator import *
 from optimizer import *
 from read_net_file import *
 from read_zonotope_file import read_zonotope
-
-# if config.domain=='gpupoly' or config.domain=='refinegpupoly':
 from refine_gpupoly import *
-from tqdm import tqdm
 from utils import (
-    negate_cstr_or_list_old,
     parse_vnn_lib_prop,
     translate_input_to_box,
     translate_output_constraints,
