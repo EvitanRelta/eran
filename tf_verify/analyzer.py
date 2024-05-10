@@ -602,6 +602,7 @@ class Analyzer:
         assert self.domain == "refinepoly"
         P_allayer, Phat_allayer, smallp_allayer, relu_groups = self.generate_krelu_cons(element, full_vars=True)
         assert len(relu_groups) > 0 and all(x is not None for x in relu_groups)
+        logging.critical(f"num of krelu constraints: {sum(y.cons.shape[0] for x in relu_groups for y in x)}")
         execution_time = time.time() - start_time
         logging.critical(f"Generate constraints: {execution_time:.5f}s")
         Hmatrix, dvector = self.obtain_output_cons_cddlib(final_adv_labels[:1], 1, ground_truth_label, [], element, len(self.nn.layertypes)-1)
