@@ -18,6 +18,7 @@
 import pickle
 from elina_abstract0 import *
 from elina_manager import *
+from fconv import generate_sparse_cover
 from deeppoly_nodes import *
 from deepzono_nodes import *
 from krelu import *
@@ -600,6 +601,7 @@ class Analyzer:
         start_time = time.time()
         assert self.domain == "refinepoly"
         P_allayer, Phat_allayer, smallp_allayer, relu_groups = self.generate_krelu_cons(element, full_vars=True)
+        assert len(relu_groups) > 0 and all(x is not None for x in relu_groups)
         execution_time = time.time() - start_time
         logging.critical(f"Generate constraints: {execution_time:.5f}s")
         Hmatrix, dvector = self.obtain_output_cons_cddlib(final_adv_labels[:1], 1, ground_truth_label, [], element, len(self.nn.layertypes)-1)
@@ -890,8 +892,7 @@ class Analyzer:
             if grouplen <= self.K:
                 kact_args.append(group)
             elif self.K>2:
-                # sparsed_combs = generate_sparse_cover(grouplen, K, s=s)
-                sparsed_combs = self.index_grouping(grouplen)
+                sparsed_combs = generate_sparse_cover(grouplen, self.K, self.s)
                 for comb in sparsed_combs:
                     kact_args.append(tuple([group[i] for i in comb]))
             elif self.K==2:
