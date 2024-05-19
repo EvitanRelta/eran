@@ -859,15 +859,13 @@ class Analyzer:
         # print(Hmatrix, dvector)
         return Hmatrix, dvector
 
-    def index_grouping(self, grouplen):
-        sparsed_combs = []
-        i = 0
-        if(self.K == 3):
-            while(i+2 < grouplen):
-                sparsed_combs.append([i, i+1, i+2])
-                i = i + 2
-        return sparsed_combs
-    
+    @staticmethod
+    def index_grouping(grouplen: int, K: int, step: int = 2) -> List[List[int]]:
+        return [
+            list(range(i, i + K))
+                for i in range(0, grouplen - K + 1, step)
+        ]
+
     def relu_grouping(self, length, lb, ub):
         assert length == len(lb) == len(ub)
 
@@ -893,7 +891,7 @@ class Analyzer:
             if grouplen <= self.K:
                 kact_args.append(group)
             elif self.K>2:
-                sparsed_combs = generate_sparse_cover(grouplen, self.K, self.s)
+                sparsed_combs = self.index_grouping(grouplen, self.K)
                 for comb in sparsed_combs:
                     kact_args.append(tuple([group[i] for i in comb]))
             elif self.K==2:
