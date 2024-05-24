@@ -659,10 +659,14 @@ class Analyzer:
             obj += 1 * var_list[i]
             model.setObjective(obj, GRB.MINIMIZE)
             model.optimize()
+            if(model.Status == 3):
+                return None, None # means verified
             lbs[i] = model.objbound
 
             model.setObjective(obj, GRB.MAXIMIZE)
             model.optimize()
+            if(model.Status == 3):
+                return None, None # means verified
             ubs[i] = model.objbound
         gurobi_lbs.append(lbs)
         gurobi_ubs.append(ubs)
